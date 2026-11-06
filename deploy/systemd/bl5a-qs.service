@@ -1,0 +1,13 @@
+[Unit]
+Description=BL5A queue server (bl5a-qs)
+PartOf=bl5a.target
+After=bl5a-spec-ioc.service bl5a-mar345-ioc.service
+
+[Service]
+Environment=RUST_LOG=info,epics_ca_rs=warn NO_COLOR=1
+EnvironmentFile=%h/.config/bl5a/bl5a.env
+ExecStart=@BL5A@/target/release/bl5a-qs --data-root ${BL5A_DATA}
+# It exits when a PV does not connect at its start, so it is started
+# again until both IOCs answer.
+Restart=on-failure
+RestartSec=5

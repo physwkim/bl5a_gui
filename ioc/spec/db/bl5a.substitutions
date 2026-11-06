@@ -1,0 +1,30 @@
+# BL5A's SPEC motors and counters, in SpecCreate's order: ADDR is the
+# mnemonic's index there. MRES is 1/|step_size| of kappa.config.
+# P, PORT (the motor port) and SPORT (SpecCreate's port) come from st.cmd.
+
+file "spec_axis.db"
+{
+pattern
+{M,       ADDR, DESC,        EGU, PREC, MRES,                  DTYP,        DIR, VELO, VBAS, ACCL, BDST, BVEL, BACC, DHLM, DLLM, INIT, RTRY}
+{sy,      0,    "512Y",      "",  4,    0.0001,                "asynMotor", Pos, 0,    0,    0.2,  0,    0,    0.2,  0,    0,    "",   0}
+{shold,   1,    "512Z",      "",  4,    0.002,                 "asynMotor", Pos, 0,    0,    0.2,  0,    0,    0.2,  0,    0,    "",   0}
+{th,      2,    "Theta",     deg, 4,    0.0001,                "asynMotor", Pos, 0,    0,    0.2,  0,    0,    0.2,  0,    0,    "",   0}
+{tth,     3,    "Two Theta", deg, 4,    0.0001,                "asynMotor", Pos, 0,    0,    0.2,  0,    0,    0.2,  0,    0,    "",   0}
+{nu,      4,    "Nu",        deg, 4,    5e-05,                 "asynMotor", Pos, 0,    0,    0.2,  0,    0,    0.2,  0,    0,    "",   0}
+{scell,   5,    "SCell",     "",  4,    0.0003846153846153846, "asynMotor", Pos, 0,    0,    0.2,  0,    0,    0.2,  0,    0,    "",   0}
+{martran, 6,    "MAR_TRAN",  "",  4,    0.001,                 "asynMotor", Pos, 0,    0,    0.2,  0,    0,    0.2,  0,    0,    "",   0}
+{marsdd,  7,    "MAR_SDD",   "",  4,    0.001,                 "asynMotor", Pos, 0,    0,    0.2,  0,    0,    0.2,  0,    0,    "",   0}
+{marshut, 8,    "MAR_Shutter", "", 4,   0.0012594458438287153, "asynMotor", Pos, 0,    0,    0.2,  0,    0,    0.2,  0,    0,    "",   0}
+{sx,      9,    "512X",      "",  4,    0.002,                 "asynMotor", Pos, 0,    0,    0.2,  0,    0,    0.2,  0,    0,    "",   0}
+{phi,     10,   "Phi",       deg, 4,    0.0001,                "asynMotor", Pos, 0,    0,    0.2,  0,    0,    0.2,  0,    0,    "",   0}
+}
+
+file "spec_live.db"
+{
+pattern
+{MNE,   ADDR}
+{sec,   0}
+{icxrd, 1}
+{det,   2}
+{ic1,   3}
+}

@@ -1,0 +1,7 @@
+#!/bin/sh
+# Starts the BL5A GUI with the settings in ~/.config/bl5a/bl5a.env; the
+# desktop shortcut runs this. Options go to gui/run_gui.py.
+set -a
+. "$HOME/.config/bl5a/bl5a.env"
+set +a
+exec "$BL5A_PYTHON" -I "$(dirname "$0")/../gui/run_gui.py" "$@"

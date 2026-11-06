@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=BL5A
+Comment=Queue BL5A alignments and mar345 measurements
+Exec=@BL5A@/deploy/bl5a-gui
+Icon=applications-science
+Terminal=false
+Categories=Science;Physics;

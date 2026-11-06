@@ -1,0 +1,16 @@
+# SPEC as an IOC: one motor record per SPEC motor, a scaler record for
+# SPEC's counters, and the command, log and status records of
+# drivers/spec, served over CA + PVA.
+
+[package]
+name = "spec-ioc"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+spec-driver = { path = "../../drivers/spec/driver" }
+epics-rs = { workspace = true, features = ["asyn", "motor", "scaler", "bridge"] }
+
+[dev-dependencies]
+ioc-conventions = { workspace = true }

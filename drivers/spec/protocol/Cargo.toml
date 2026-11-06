@@ -1,0 +1,15 @@
+# SPEC server/client wire protocol (svr_head v2-v4, spec_server.h), shared
+# by the SPEC IOC driver and by simulators that play the SPEC server.
+
+[package]
+name = "spec-protocol"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+epics-libcom-rs = { workspace = true }
+tokio = { version = "1", features = ["io-util"] }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["io-util", "macros", "rt"] }

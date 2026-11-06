@@ -1,0 +1,21 @@
+# One process owning the BL5A world state, played to clients through the
+# faces the real beamline has (SPEC server; later mar345dtb and LakeShore).
+
+[package]
+name = "bl5a-sim"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+chrono = "0.4"
+epics-ca-rs = "0.34.0"
+epics-libcom-rs = "0.34.0"
+rsfai-geometry = { git = "https://github.com/physwkim/rsFAI", rev = "e0be64f884031610a8f0207e957e6c029b78556b" }
+spec-protocol = { path = "../drivers/spec/protocol" }
+tokio = { version = "1", features = ["io-util", "macros", "net", "rt-multi-thread", "sync", "time"] }
+
+[dev-dependencies]
+# The decoder the tests read the written frames back with.
+ad-mar345 = { workspace = true }
+tokio = { version = "1", features = ["io-util", "macros", "net", "rt", "rt-multi-thread", "sync", "test-util", "time"] }

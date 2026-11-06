@@ -1,0 +1,20 @@
+# st.cmd's SPEC motors and counters, in SpecCreate's order: ADDR is the
+# mnemonic's index there. MRES is 1/|step_size| of SPEC's config.
+# P, PORT (the motor port) and SPORT (SpecCreate's port) come from st.cmd.
+
+file "spec_axis.db"
+{
+pattern
+{M,   ADDR, DESC, EGU, PREC, MRES,   DTYP,        DIR, VELO, VBAS, ACCL, BDST, BVEL, BACC, DHLM, DLLM, INIT, RTRY}
+{tth, 0,    tth,  deg, 4,    0.0001, "asynMotor", Pos, 0,    0,    0.2,  0,    0,    0.2,  0,    0,    "",   0}
+{th,  1,    th,   deg, 4,    0.0001, "asynMotor", Pos, 0,    0,    0.2,  0,    0,    0.2,  0,    0,    "",   0}
+}
+
+file "spec_live.db"
+{
+pattern
+{MNE, ADDR}
+{sec, 0}
+{mon, 1}
+{det, 2}
+}

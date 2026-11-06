@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "bl5a": {
+      "command": "/home/stevek/work/bl5a_gui/deploy/bl5a-mcp",
+      "args": []
+    }
+  }
+}

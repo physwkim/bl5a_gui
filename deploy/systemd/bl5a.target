@@ -1,0 +1,6 @@
+[Unit]
+Description=BL5A automation: spec-ioc, bl5a-qs, bl5a-integrator
+Wants=bl5a-spec-ioc.service bl5a-qs.service bl5a-integrator.service
+
+[Install]
+WantedBy=default.target

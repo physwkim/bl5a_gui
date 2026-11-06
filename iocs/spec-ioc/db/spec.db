@@ -1,0 +1,142 @@
+# One SPEC server's command, log and status records.
+#   P     record prefix
+#   PORT  SpecCreate's port; its command port is $(PORT)_CMD
+#
+# A put to Cmd returns when SPEC has replied, and its FLNK chain reads
+# that command's reply and status, so a put with completion that returns
+# leaves Cmd:Reply and Cmd:Status final.
+
+record(lso, "$(P)Cmd") {
+    field(DESC, "SPEC command")
+    field(DTYP, "asynOctetWrite")
+    field(OUT,  "@asyn($(PORT)_CMD,0)SPEC_CMD")
+    field(SIZV, "1024")
+    field(FLNK, "$(P)Cmd:Reply")
+}
+
+record(waveform, "$(P)Cmd:Reply") {
+    field(DESC, "SPEC reply, or why none")
+    field(DTYP, "asynOctetRead")
+    field(INP,  "@asyn($(PORT)_CMD,0)SPEC_CMD_REPLY")
+    field(FTVL, "CHAR")
+    field(NELM, "65536")
+    field(FLNK, "$(P)Cmd:Status")
+}
+
+record(bi, "$(P)Cmd:Status") {
+    field(DESC, "SPEC command failed")
+    field(DTYP, "asynInt32")
+    field(INP,  "@asyn($(PORT)_CMD,0)SPEC_CMD_STATUS")
+    field(ZNAM, "OK")
+    field(ONAM, "Failed")
+    field(OSV,  "MINOR")
+}
+
+# A Cmd whose scan's points the Scan: records show as SPEC sends them
+# (SCAN_PT, one per point): the rows so far, row by row, and SCAN_COLS's
+# names at the first point, one per line. A ScanCmd SPEC takes clears
+# both; one it refuses leaves the last scan's. The command fails when its
+# points disagree with the NPTS and SCAN_COLS it leaves, and the points
+# that arrived stay, as they do when it is aborted.
+#
+# Scan:Data and Scan:Cols are final when a put with completion returns;
+# Scan:Live:Data and Scan:Live:Cols post each point as it arrives. NELM
+# of both data records is spec_driver::SCAN_NELM.
+record(lso, "$(P)ScanCmd") {
+    field(DESC, "SPEC scan command")
+    field(DTYP, "asynOctetWrite")
+    field(OUT,  "@asyn($(PORT)_CMD,0)SPEC_SCAN_CMD")
+    field(SIZV, "1024")
+    field(FLNK, "$(P)Scan:Data")
+}
+
+record(waveform, "$(P)Scan:Data") {
+    field(DESC, "SPEC scan points")
+    field(DTYP, "asynFloat64ArrayIn")
+    field(INP,  "@asyn($(PORT),0)SPEC_SCAN_DATA")
+    field(FTVL, "DOUBLE")
+    field(NELM, "65536")
+    field(FLNK, "$(P)Scan:Cols")
+}
+
+record(waveform, "$(P)Scan:Cols") {
+    field(DESC, "SPEC scan columns")
+    field(DTYP, "asynOctetRead")
+    field(INP,  "@asyn($(PORT),0)SPEC_SCAN_COLS")
+    field(FTVL, "CHAR")
+    field(NELM, "4096")
+    field(FLNK, "$(P)Cmd:Reply")
+}
+
+record(waveform, "$(P)Scan:Live:Data") {
+    field(DESC, "SPEC scan points so far")
+    field(DTYP, "asynFloat64ArrayIn")
+    field(INP,  "@asyn($(PORT),0)SPEC_SCAN_DATA")
+    field(SCAN, "I/O Intr")
+    field(FTVL, "DOUBLE")
+    field(NELM, "65536")
+}
+
+record(waveform, "$(P)Scan:Live:Cols") {
+    field(DESC, "SPEC scan columns so far")
+    field(DTYP, "asynOctetRead")
+    field(INP,  "@asyn($(PORT),0)SPEC_SCAN_COLS")
+    field(SCAN, "I/O Intr")
+    field(FTVL, "CHAR")
+    field(NELM, "4096")
+}
+
+record(bi, "$(P)Cmd:Busy") {
+    field(DESC, "SPEC command running")
+    field(DTYP, "asynInt32")
+    field(INP,  "@asyn($(PORT)_CMD,0)SPEC_CMD_BUSY")
+    field(SCAN, "I/O Intr")
+    field(PINI, "YES")
+    field(ZNAM, "Idle")
+    field(ONAM, "Busy")
+}
+
+# SPEC's ^C: it ends the running command, moves and counts.
+record(bo, "$(P)Cmd:Abort") {
+    field(DESC, "abort SPEC")
+    field(DTYP, "asynInt32")
+    field(OUT,  "@asyn($(PORT),0)SPEC_ABORT")
+    field(ZNAM, "Idle")
+    field(ONAM, "Abort")
+}
+
+# status/ready: SPEC is not at its prompt, whoever made it busy.
+record(bi, "$(P)Busy") {
+    field(DESC, "SPEC busy")
+    field(DTYP, "asynInt32")
+    field(INP,  "@asyn($(PORT),0)SPEC_BUSY")
+    field(SCAN, "I/O Intr")
+    field(PINI, "YES")
+    field(ZNAM, "Ready")
+    field(ONAM, "Busy")
+}
+
+record(bi, "$(P)Connected") {
+    field(DESC, "SPEC connected")
+    field(DTYP, "asynInt32")
+    field(INP,  "@asyn($(PORT),0)SPEC_CONNECTED")
+    field(SCAN, "I/O Intr")
+    field(PINI, "YES")
+    field(ZNAM, "Disconnected")
+    field(ONAM, "Connected")
+    field(ZSV,  "MAJOR")
+}
+
+# SPEC's tty output and the driver's own lines: the newest that fit, each
+# "<run>:<seq> <text>" (run: the driver's start in ms, seq: from 1), the
+# whole tail on every line. A CA monitor delivers only the latest array, so
+# a reader takes the lines it has not seen; one value is enough here.
+# NELM is spec_driver::LOG_NELM.
+record(waveform, "$(P)Log") {
+    field(DESC, "SPEC log")
+    field(DTYP, "asynOctetRead")
+    field(INP,  "@asyn($(PORT),0)SPEC_LOG")
+    field(SCAN, "I/O Intr")
+    field(FTVL, "CHAR")
+    field(NELM, "8192")
+}

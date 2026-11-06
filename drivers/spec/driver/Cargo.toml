@@ -1,0 +1,17 @@
+# SPEC server-mode client as asyn ports: motor records move SPEC motors
+# through `motor/<mne>/start_one`, a scaler record counts through
+# `scaler/.all./count`, and a command port runs SV_CMD_WITH_RETURN. One
+# session thread owns the TCP connection and reconnects when SPEC restarts.
+
+[package]
+name = "spec-driver"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+spec-protocol = { path = "../protocol" }
+motor-common = { workspace = true }
+epics-rs = { workspace = true, features = ["asyn", "motor", "scaler"] }
+serde_json = { workspace = true }
+tokio = { version = "1", features = ["rt", "net", "sync", "time", "macros", "io-util"] }

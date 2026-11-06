@@ -1,0 +1,22 @@
+[workspace]
+resolver = "3"
+members = [
+    "drivers/spec/driver",
+    "drivers/spec/protocol",
+    "integrator",
+    "iocs/spec-ioc",
+    "qs",
+    "sim",
+]
+
+# The SPEC crates take epics-rs from here, as they did in epics-rs-iocs.
+# The epics-rs-iocs crates come from one pinned revision, the one
+# deploy/install.sh builds mar345-ioc from, so the pck decoder bl5a-sim
+# tests against and bl5a-integrator reads with is the IOC's own.
+[workspace.dependencies]
+epics-rs = "0.34.0"
+epics-libcom-rs = "0.34.0"
+serde_json = { version = "1", features = ["float_roundtrip"] }
+ad-mar345 = { git = "https://github.com/epics-rs/epics-rs-iocs", rev = "910c8ca8286c8ac55b71c784596af3350c993f43" }
+ioc-conventions = { git = "https://github.com/epics-rs/epics-rs-iocs", rev = "910c8ca8286c8ac55b71c784596af3350c993f43" }
+motor-common = { git = "https://github.com/epics-rs/epics-rs-iocs", rev = "910c8ca8286c8ac55b71c784596af3350c993f43" }

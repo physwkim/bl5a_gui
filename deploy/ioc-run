@@ -1,0 +1,11 @@
+#!/bin/sh
+# ioc-run FIFO IOC ST_CMD: runs an IOC with its shell reading FIFO.
+# An IOC exits when its standard input ends. It holds FIFO open for writing
+# as well, so that input never ends; `echo dbl > FIFO` types into the shell
+# and the answer goes to the service's journal.
+set -e
+fifo=$1
+shift
+rm -f "$fifo"
+mkfifo -m 600 "$fifo"
+exec "$@" 0<>"$fifo"

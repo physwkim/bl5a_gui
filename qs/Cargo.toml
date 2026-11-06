@@ -1,0 +1,21 @@
+# The BL5A queue server: the four macro plans on bsrs, over Channel Access
+# to spec-ioc, mar345-ioc and the temperature IOC.
+
+[package]
+name = "bl5a-qs"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+async-stream = "0.3"
+async-trait = "0.1"
+bsrs = { version = "0.6.0", default-features = false, features = ["host", "ca"] }
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+clap = { version = "4", features = ["derive"] }
+futures = "0.3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal", "sync", "time"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }

@@ -1,0 +1,16 @@
+[Unit]
+Description=BL5A mar345-ioc (BL5A:MAR345:*), only where the beamline runs none
+PartOf=bl5a.target
+After=bl5a-sim.service
+
+[Service]
+EnvironmentFile=%h/.config/bl5a/bl5a.env
+EnvironmentFile=%h/.config/bl5a/mar345-ioc.env
+WorkingDirectory=@BL5A@/ioc/mar345
+RuntimeDirectory=bl5a-mar345-ioc
+ExecStart=@BL5A@/deploy/ioc-run %t/bl5a-mar345-ioc/shell @BL5A@/target/mar345-ioc/bin/mar345-ioc st.cmd
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=bl5a.target

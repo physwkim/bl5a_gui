@@ -1,0 +1,66 @@
+# One SPEC motor: asyn_motor.db's motor record, which needs $(MOTOR)/db on
+# EPICS_DB_INCLUDE_PATH, and SPEC's rates copied into it.
+#   P, M, DESC, EGU, PREC, PORT, ADDR  as asyn_motor.db
+#   MRES   1/|step_size|, so VAL is SPEC's user position
+#   SPORT  SpecCreate's port, where SPEC's rates are
+#
+# SPEC owns the limits (DHLM = DLLM = 0 turns the record's off) and the
+# retries. VELO and VBAS follow SPEC's slew_rate and base_rate; a move
+# sends the record's only when it differs, so SPEC keeps its own speed
+# until someone changes VELO here.
+
+include "asyn_motor.db"
+
+record(motor, "$(P)$(M)") {
+    # SET writes SPEC's position (`set`) instead of the record's offset.
+    field(FOFF, "Frozen")
+}
+
+record(ai, "$(P)$(M):SpecVelo") {
+    field(DTYP, "asynFloat64")
+    field(INP,  "@asyn($(SPORT),$(ADDR))SPEC_VELO")
+    field(SCAN, "I/O Intr")
+    field(PREC, "$(PREC)")
+    field(FLNK, "$(P)$(M):SetVelo")
+}
+
+record(ao, "$(P)$(M):SetVelo") {
+    field(OMSL, "closed_loop")
+    field(DOL,  "$(P)$(M):SpecVelo NPP MS")
+    field(IVOA, "Don't drive outputs")
+    field(OUT,  "$(P)$(M).VELO NPP")
+    field(PREC, "$(PREC)")
+}
+
+record(ai, "$(P)$(M):SpecVbas") {
+    field(DTYP, "asynFloat64")
+    field(INP,  "@asyn($(SPORT),$(ADDR))SPEC_VBAS")
+    field(SCAN, "I/O Intr")
+    field(PREC, "$(PREC)")
+    field(FLNK, "$(P)$(M):SetVbas")
+}
+
+record(ao, "$(P)$(M):SetVbas") {
+    field(OMSL, "closed_loop")
+    field(DOL,  "$(P)$(M):SpecVbas NPP MS")
+    field(IVOA, "Don't drive outputs")
+    field(OUT,  "$(P)$(M).VBAS NPP")
+    field(PREC, "$(PREC)")
+}
+
+# SPEC's config_velocity.
+record(ai, "$(P)$(M):SpecVmax") {
+    field(DTYP, "asynFloat64")
+    field(INP,  "@asyn($(SPORT),$(ADDR))SPEC_VMAX")
+    field(SCAN, "I/O Intr")
+    field(PREC, "$(PREC)")
+    field(FLNK, "$(P)$(M):SetVmax")
+}
+
+record(ao, "$(P)$(M):SetVmax") {
+    field(OMSL, "closed_loop")
+    field(DOL,  "$(P)$(M):SpecVmax NPP MS")
+    field(IVOA, "Don't drive outputs")
+    field(OUT,  "$(P)$(M).VMAX NPP")
+    field(PREC, "$(PREC)")
+}

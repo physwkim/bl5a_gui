@@ -1,0 +1,15 @@
+/target/
+# The beamline originals (ref/spec holds what the code reads from them).
+/261104_spec_d.tar.gz
+/5a.zip
+/5a/
+._*
+.DS_Store
+__pycache__/
+.pytest_cache/
+# Kept locally, not published: SPEC's copyrighted manual and macro library,
+# and the beamline's other session config.
+/ref/spec/server.man
+/ref/spec/*_macros.mac
+/ref/spec/*_globals.mac
+/ref/spec/sixc.config

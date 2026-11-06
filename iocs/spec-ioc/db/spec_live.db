@@ -1,0 +1,14 @@
+# One SPEC counter's value as SPEC sends it, stamped when it arrived.
+#   P     record prefix
+#   MNE   counter mnemonic
+#   SPORT SpecCreate's port
+#   ADDR  the counter's index in SpecCreate's counter list
+
+record(ai, "$(P)$(MNE):Live") {
+    field(DESC, "$(MNE) live")
+    field(DTYP, "asynFloat64")
+    field(INP,  "@asyn($(SPORT),$(ADDR))SPEC_LIVE")
+    field(SCAN, "I/O Intr")
+    field(TSE,  "-2")
+    field(PREC, "$(PREC=3)")
+}

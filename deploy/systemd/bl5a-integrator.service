@@ -1,0 +1,10 @@
+[Unit]
+Description=BL5A integrator (bl5a-integrator)
+PartOf=bl5a.target
+After=bl5a-qs.service
+
+[Service]
+EnvironmentFile=%h/.config/bl5a/bl5a.env
+ExecStart=@BL5A@/target/release/bl5a-integrator --poni ${BL5A_PONI} --root ${BL5A_DATA}
+Restart=on-failure
+RestartSec=5

@@ -1,0 +1,15 @@
+# The geometry bl5a-sim renders mar345 frames with and bl5a-integrator
+# integrates them with. Chosen for the sim; it is not a BL5A calibration.
+# It describes the full 345 mm plate: a smaller scan diameter keeps the plate
+# centre, so its origin moves in by (0.345 m - diameter) / 2 on both axes,
+# and its pixel size (100 or 150 um) comes from the scan mode.
+poni_version: 2.1
+Detector: Detector
+Detector_config: {"pixel1": 0.0001, "pixel2": 0.0001, "max_shape": [3450, 3450], "orientation": 3}
+Distance: 0.3
+Poni1: 0.1731
+Poni2: 0.1719
+Rot1: 0.004
+Rot2: -0.003
+Rot3: 0.0
+Wavelength: 7.749e-11

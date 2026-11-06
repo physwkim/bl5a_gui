@@ -1,0 +1,14 @@
+[Unit]
+Description=BL5A simulated beamline: SPEC server on 16510, mar345dtb on 5001
+PartOf=bl5a.target
+
+[Service]
+EnvironmentFile=%h/.config/bl5a/bl5a.env
+# Its default config and PONI paths are relative to this directory.
+WorkingDirectory=@BL5A@
+ExecStart=@BL5A@/target/release/bl5a-sim --port 16510 $BL5A_SIM_ARGS
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=bl5a.target

@@ -1,0 +1,8 @@
+#!/bin/sh
+# Starts the BL5A MCP server on stdio with the settings in
+# ~/.config/bl5a/bl5a.env; Claude Code and Codex run this. Options go to
+# gui/run_mcp.py.
+set -a
+. "$HOME/.config/bl5a/bl5a.env"
+set +a
+exec "$BL5A_PYTHON" -I "$(dirname "$0")/../gui/run_mcp.py" "$@"
