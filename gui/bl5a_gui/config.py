@@ -23,6 +23,9 @@ def arguments(parser):
     return parser
 
 SPEC = "BL5A:SPEC:"
+# The SPEC command line as a long string: Cmd itself is a DBF_STRING and
+# holds 39 characters, as bl5a-qs's Cmd.VAL$ does not.
+SPEC_CMD = SPEC + "Cmd.VAL$"
 MAR = "BL5A:MAR345:cam1:"
 
 # The ring current; the sim stack serves no such PV, so it reads "—" there.

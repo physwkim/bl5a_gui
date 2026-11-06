@@ -233,7 +233,7 @@ class Beamline:
             if name:
                 self.pvs[name] = epics.PV(name, auto_monitor=True, form="ctrl", callback=self._changed,
                                           connection_callback=self._connected)
-        puts = [config.SPEC + s for s in ("Cmd", "Cmd:Status", "Cmd:Reply", "Cmd:Abort")]
+        puts = [config.SPEC_CMD] + [config.SPEC + s for s in ("Cmd:Status", "Cmd:Reply", "Cmd:Abort")]
         puts += [config.SPEC + m + f for m in config.MOTORS for f in (".TWF", ".TWR")]
         for name in puts:
             self.pvs[name] = epics.PV(name, auto_monitor=False)
@@ -481,13 +481,13 @@ class Beamline:
                 c.done.set()
 
             try:
-                r = self.pvs[config.SPEC + "Cmd"].put(cmd, wait=False, use_complete=True, callback=completed)
+                r = self.pvs[config.SPEC_CMD].put(cmd, wait=False, use_complete=True, callback=completed)
             except Exception:
                 self.spec_job = None
                 raise
             if r is None:
                 self.spec_job = None
-                raise ToolError(config.SPEC + "Cmd: not connected")
+                raise ToolError(config.SPEC_CMD + ": not connected")
         c.done.wait(wait_s)
         return self.command_result(c)
 
