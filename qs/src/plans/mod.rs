@@ -209,6 +209,7 @@ impl<'a> Ops<'a> {
         ];
         let mut stages = vec![("stage", String), ("motor", String), ("pick", String)];
         stages.extend(stats.map(|k| (k, Number)));
+        stages.push(("rejected", Integer));
         let mut exposures = vec![
             ("name", String),
             ("file", String),
@@ -326,7 +327,7 @@ impl<'a> Ops<'a> {
         let before = self.ctx.position(axis.clone()).await?;
         let (plan, points) = scan.plan(self.dev);
         self.ctx.run(plan).await?;
-        let stats = points
+        let (stats, rejected) = points
             .stats()
             .ok_or_else(|| format!("{line}: the scan has no points"))?;
         let target = pick.of(&stats);
@@ -352,6 +353,7 @@ impl<'a> Ops<'a> {
             ("xmax", json!(stats.xpk)),
             ("fwhm", json!(stats.fwhm)),
             ("ymax", json!(stats.ymax)),
+            ("rejected", json!(rejected)),
         ];
         self.event(&self.stages.clone(), values).await
     }

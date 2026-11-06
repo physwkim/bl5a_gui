@@ -547,7 +547,8 @@ Do these in order and go on only when a step matches SPEC.
 6. **An alignment.** Queue Coin cell or Thin film for the sample on the
    stage. Compare each stage's CEN and FWHM in the GUI with SPEC's own
    scan over the same range (the scan title in the Scan tab gives it) and
-   SPEC's `CEN`.
+   SPEC's `CEN`; a stage whose scan had a point replaced by the outlier
+   filter can differ ([usage.md](usage.md#before-a-stage-moves)).
 7. **A frame.** Start the integrator
    (`systemctl --user start bl5a-integrator`). Battery, Single shot, a
    short Texpo and a test name. Check

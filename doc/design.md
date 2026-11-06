@@ -281,6 +281,10 @@ FullFileName_RBV), 온도(`BL5A:TC:*`), suspender용 링
   반치점의 중간(한쪽이 최대점에 붙으면 다른 쪽), COM = Σxy/Σy, xMAX는 첫
   최대점의 x. SPEC C의 `array_op` 원본은 없으므로 빔라인에서 같은 범위의 SPEC
   스캔 값과 비교해 확인한다.
+- **이상점 필터**(`qs/src/screen.rs`): 통계는 Hampel 필터(자신과 양옆
+  2점의 중앙값에서 3σ 넘게 벗어난 점을 그 중앙값으로; σ는 다섯 점의 MAD,
+  √중앙값, 스캔 전체 이웃차 MAD 중 큰 것) 뒤의 점으로 계산한다. cscan의 둘째
+  샘플은 다른 샘플보다 약 1.7배 오래 세어 CEN·xMAX를 끌고 간다.
 - `umv m CEN; set m 0`은 motor 레코드 이동과 `set_position`(SV_CMD `set`)이다.
 - **데이터 폴더**: 큐 아이템 하나가 폴더 하나 `<root>/<series>/`를 갖는다.
   폴더 이름은 아이템의 `md.series`, 없으면 plan 이름이고, root는 아이템의
@@ -343,8 +347,8 @@ FullFileName_RBV), 온도(`BL5A:TC:*`), suspender용 링
     ±0.6(30구간, 0.5 s) → CEN, set 0; shold ±0.15(20구간, 0.5 s) → CEN.
   - specular: tth 1.2·th 0.6, `atte 4`, 상대 스텝 th ±0.2(120구간, 0.5 s) →
     xMAX, set th 0.6.
-  - 끝: `mar345closeshutter`, erase. 단계마다 이전·이후 위치와 CEN/FWHM을
-    이벤트로 낸다.
+  - 끝: `mar345closeshutter`, erase. 단계마다 이전·이후 위치, CEN/FWHM과
+    필터가 바꾼 점 수(`rejected`)를 이벤트로 낸다.
 - `insitu_step`: T나 ramp가 있으면 `qdo` temperature.mac(myinsitu와 같은
   경로) → `set_ramp ramp` → wait이면 `{local DELTA_K; DELTA_K=tol; changec
   T}`로 |T − 읽음| ≤ 허용오차(기본 0.3 °C, sixc `DELTA_K`)까지 대기(kappa에

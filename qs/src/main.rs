@@ -21,6 +21,7 @@ mod peak;
 mod place;
 mod plans;
 mod scan;
+mod screen;
 mod specfile;
 
 use devices::Devices;

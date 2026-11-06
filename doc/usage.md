@@ -342,6 +342,16 @@ where a value is given, redefines that position with `set`.
 
 It ends with `mar345closeshutter` and an erase of the plate.
 
+### Before a stage moves
+
+A point more than 3σ from the median of itself and the two points either
+side of it is replaced by that median, and so is a point that is not a
+number. σ is that of the five points, but at least the square root of
+their median and the noise of the whole scan. A cscan's second sample
+counts about 1.7 times as long as the others and is often replaced this
+way; left in, it can be the maximum CEN and pl_xMAX follow. The
+statistics are those of the filtered points.
+
 ### Stages
 
 ![The stages of an align_film run](img/stages-film.png)
@@ -361,7 +371,8 @@ title names the plan and series. It is cleared when the next
 | Set | the value given to `set`, empty when the stage did not set | how far the user offset moved |
 
 The statistics are splot's (`CEN`, `pl_COM`, `pl_xMAX`), the ones SPEC's
-macros read; bl5a-qs and the GUI compute them with the same code.
+macros read, of the points after the outlier filter (see
+[Before a stage moves](#before-a-stage-moves)).
 
 ### Alignment history
 
@@ -401,9 +412,11 @@ points already drawn fails the scan.
 When the scan ends, the line above the plot gives CEN, FWHM, COM and the
 maximum and its position, and markers are drawn: CEN red, COM green, MAX
 blue, and the stage's target black with the pick's name. In the picture
-the stage picked CEN, so the black target lies on the red CEN line. A
-scan that did not end in success shows its exit status and why; the
-whole line is in its tooltip when it does not fit.
+the stage picked CEN, so the black target lies on the red CEN line. The
+line and the coloured markers are of the points as taken; where the
+outlier filter replaced a point, the target is of the filtered points
+and can lie off them. A scan that did not end in success shows its exit
+status and why; the whole line is in its tooltip when it does not fit.
 
 The **Scan** list keeps this window's last 100 scans; pick one to look
 at it again. Every scan, from any window or none, is also appended to
