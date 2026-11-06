@@ -1,12 +1,63 @@
-//! The outlier filter an alignment scan's points go through before
-//! their statistics: a cscan's second sample counts about 1.7 times as
-//! long as the rest, enough to be the maximum `CEN` and `pl_xMAX` follow.
+//! What an alignment scan must show before its motor moves. A point far
+//! off its neighbours is put back to their median: a cscan's second
+//! sample counts about 1.7 times as long as the rest, enough to be the
+//! maximum `CEN` and `pl_xMAX` follow. Then a scan whose peak or edge
+//! does not stand out of the noise, is not inside the range, or is one
+//! point wide gives no target.
+
+use crate::peak::{Stats, half};
+
+/// The statistic an alignment scan's motor goes to.
+#[derive(Clone, Copy, Debug)]
+pub enum Pick {
+    /// `CEN` of a peak.
+    Cen,
+    /// `pl_COM` of a peak.
+    Com,
+    /// `pl_xMAX` of a peak.
+    XMax,
+    /// The half-maximum crossing of an edge, where a half-cut scan's
+    /// sample takes half the beam. The macros' `CEN` lies halfway between
+    /// it and the maximum, which on the unblocked plateau is wherever the
+    /// noise puts it.
+    Edge,
+}
+
+impl Pick {
+    pub fn name(self) -> &'static str {
+        match self {
+            Pick::Cen => "CEN",
+            Pick::Com => "pl_COM",
+            Pick::XMax => "pl_xMAX",
+            Pick::Edge => "EDGE",
+        }
+    }
+}
+
+/// A scan with a target.
+#[derive(Debug)]
+pub struct Screened {
+    /// splot's statistics of the filtered points.
+    pub stats: Stats,
+    pub target: f64,
+    /// How many points the filter replaced.
+    pub rejected: usize,
+}
 
 /// The outlier filter's window: the point and two either side, so two
 /// adjacent points far above the rest are outliers and three are not.
 const HALF_WINDOW: usize = 2;
 /// A point this many σ from its window's median is an outlier.
 const OUTLIER: f64 = 3.0;
+/// The visibility test averages a scan down to this many bins, so a
+/// 2000-sample fly scan is judged on means of 80 samples, not on its
+/// noisiest sample.
+const BINS: usize = 25;
+/// A scan whose bins change by less than this fraction of their
+/// maximum, or by less than `MIN_SNR` times a bin's noise, shows
+/// nothing.
+const MIN_CONTRAST: f64 = 0.10;
+const MIN_SNR: f64 = 5.0;
 /// σ per median absolute deviation, for normal noise.
 const MAD_SIGMA: f64 = 1.4826;
 
@@ -45,7 +96,7 @@ fn noise(y: &[f64]) -> f64 {
 /// is the window's, but at least the counting noise √median and the
 /// scan's own noise, so a quiet window does not make an ordinary
 /// fluctuation an outlier. The filtered points and how many changed.
-pub fn hampel(y: &[f64]) -> (Vec<f64>, usize) {
+fn hampel(y: &[f64]) -> (Vec<f64>, usize) {
     let floor = noise(y);
     let mut out = y.to_vec();
     let mut replaced = 0;
@@ -70,10 +121,95 @@ pub fn hampel(y: &[f64]) -> (Vec<f64>, usize) {
     (out, replaced)
 }
 
+/// How much the scan changes: the range of its bin means as a fraction
+/// of the largest, and in the noise of a mean.
+fn contrast(y: &[f64]) -> (f64, f64) {
+    let b = (y.len() / BINS).max(1);
+    let means: Vec<f64> = y
+        .chunks_exact(b)
+        .map(|c| c.iter().sum::<f64>() / b as f64)
+        .collect();
+    let top = means.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+    let range = top - means.iter().copied().fold(f64::INFINITY, f64::min);
+    (range / top, range / (noise(y) / (b as f64).sqrt()))
+}
+
+/// The scan's statistics and `pick`'s target, or why it has none.
+pub fn screen(x: &[f64], y: &[f64], pick: Pick) -> Result<Screened, String> {
+    let (y, rejected) = hampel(y);
+    if y.iter().any(|v| !v.is_finite()) {
+        return Err("the scan has a run of points that are not numbers".into());
+    }
+    let stats = Stats::of(x, &y).ok_or("the scan has no points")?;
+    let (part, snr) = contrast(&y);
+    if !(part >= MIN_CONTRAST && snr >= MIN_SNR) {
+        let what = if let Pick::Edge = pick {
+            "edge"
+        } else {
+            "peak"
+        };
+        return Err(format!(
+            "no {what} visible: the scan changes by {:.0}% of its maximum, {snr:.1} times its noise",
+            part * 100.0
+        ));
+    }
+    if !matches!(pick, Pick::Edge) {
+        inside(&y, stats.ymax)?;
+    }
+    let target = match pick {
+        Pick::Cen => stats.cen,
+        Pick::Com => stats.com,
+        Pick::XMax => stats.xpk,
+        Pick::Edge => match (half(x, &y, -1), half(x, &y, 1)) {
+            (Some(v), None) | (None, Some(v)) => v,
+            (None, None) => {
+                return Err(
+                    "the scan never falls to half its maximum: no edge in the range".into(),
+                );
+            }
+            (Some(_), Some(_)) => {
+                return Err(
+                    "the scan falls to half its maximum on both sides: a peak, not an edge".into(),
+                );
+            }
+        },
+    };
+    if !target.is_finite() {
+        return Err(format!("{} is {target}", pick.name()));
+    }
+    Ok(Screened {
+        stats,
+        target,
+        rejected,
+    })
+}
+
+/// A peak inside the range: its maximum not an end point, and a
+/// neighbour above half of it. With both neighbours at or below half,
+/// splot's crossings are the neighbours and `CEN` the maximum, whatever
+/// the peak's width.
+fn inside(y: &[f64], ymax: f64) -> Result<(), String> {
+    let i = y
+        .iter()
+        .position(|&v| v == ymax)
+        .expect("the maximum is one of the points");
+    let end = if i == 0 {
+        "first"
+    } else if i + 1 == y.len() {
+        "last"
+    } else if y[i - 1] <= ymax / 2.0 && y[i + 1] <= ymax / 2.0 {
+        return Err("the peak is one point wide at half maximum".into());
+    } else {
+        return Ok(());
+    };
+    Err(format!(
+        "the maximum is the scan's {end} point: no peak in the range"
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::peak::Stats;
 
     /// `n` points from `a` to `b`.
     fn grid(a: f64, b: f64, n: usize) -> Vec<f64> {
@@ -111,15 +247,20 @@ mod tests {
         })
     }
 
+    fn fails(x: &[f64], y: &[f64], pick: Pick) -> String {
+        screen(x, y, pick).unwrap_err()
+    }
+
     #[test]
     fn long_second_sample_of_an_edge_is_rejected() {
         let x = grid(0.0, 1.0, 101);
         let mut y = edge(&x, 0.437, 100.0);
         y[1] *= 1.7;
-        assert_eq!(Stats::of(&x, &y).unwrap().xpk, x[1]);
-        let (f, rejected) = hampel(&y);
-        assert_eq!(rejected, 1);
-        assert!(f[1] < 1100.0, "{}", f[1]);
+        let raw = Stats::of(&x, &y).unwrap();
+        let s = screen(&x, &y, Pick::Edge).unwrap();
+        assert!(raw.cen < 0.3, "the sample is the maximum: CEN {}", raw.cen);
+        assert_eq!(s.rejected, 1);
+        assert!((s.target - 0.437).abs() < 0.01, "{}", s.target);
     }
 
     #[test]
@@ -127,16 +268,66 @@ mod tests {
         let x = grid(0.0, 1.0, 101);
         let mut y = gauss(&x, 0.5, 0.08, 50.0);
         (y[20], y[21], y[70]) = (3000.0, 3000.0, f64::NAN);
-        let (f, rejected) = hampel(&y);
-        assert_eq!(rejected, 3);
-        let cen = Stats::of(&x, &f).unwrap().cen;
-        assert!((cen - 0.5).abs() < 0.01, "{cen}");
+        let s = screen(&x, &y, Pick::Cen).unwrap();
+        assert_eq!(s.rejected, 3);
+        assert!((s.target - 0.5).abs() < 0.01, "{}", s.target);
     }
 
     #[test]
-    fn three_point_peak_is_kept() {
+    fn flat_scan_shows_nothing() {
+        let x = grid(0.0, 1.0, 101);
+        let high = counts(&x, |_| 1000.0);
+        assert!(fails(&x, &high, Pick::Cen).starts_with("no peak visible"));
+        // Over 10% from bin to bin, but only by counting noise.
+        let x = grid(0.0, 1.0, 401);
+        let low = counts(&x, |_| 10.0);
+        let (part, snr) = contrast(&hampel(&low).0);
+        assert!(part >= MIN_CONTRAST && snr < MIN_SNR, "{part} {snr}");
+        assert!(fails(&x, &low, Pick::Edge).starts_with("no edge visible"));
+    }
+
+    #[test]
+    fn edge_short_of_half_has_no_target() {
+        let x = grid(0.0, 1.0, 101);
+        let y = edge(&x, 0.5, 750.0);
+        assert!(fails(&x, &y, Pick::Edge).starts_with("the scan never falls to half"));
+    }
+
+    #[test]
+    fn peak_is_no_edge() {
+        let x = grid(0.0, 1.0, 101);
+        let y = gauss(&x, 0.5, 0.08, 50.0);
+        assert!(fails(&x, &y, Pick::Edge).ends_with("a peak, not an edge"));
+    }
+
+    #[test]
+    fn peak_at_the_end_has_no_target() {
+        let x = grid(0.0, 1.0, 21);
+        let y: Vec<f64> = x.iter().map(|x| 100.0 + 1000.0 * x).collect();
+        assert!(fails(&x, &y, Pick::XMax).starts_with("the maximum is the scan's last point"));
+        let y: Vec<f64> = y.into_iter().rev().collect();
+        assert!(fails(&x, &y, Pick::Com).starts_with("the maximum is the scan's first point"));
+    }
+
+    #[test]
+    fn peak_one_point_wide_has_no_target() {
+        let x = grid(0.0, 2.0, 21);
         let mut y = vec![10.0; 21];
         y[9..12].copy_from_slice(&[40.0, 100.0, 50.0]);
         assert_eq!(hampel(&y).1, 0);
+        assert!(fails(&x, &y, Pick::Cen).ends_with("one point wide at half maximum"));
+        y[11] = 51.0;
+        assert!(screen(&x, &y, Pick::Cen).is_ok());
+    }
+
+    /// A th scan narrower than the rocking curve: splot's `CEN` is the
+    /// maximum.
+    #[test]
+    fn peak_wider_than_the_scan_goes_to_its_maximum() {
+        let x = grid(-0.6, 0.6, 31);
+        let y = counts(&x, |x| 1000.0 * (-((x - 0.1) / 1.2).powi(2) / 2.0).exp());
+        let s = screen(&x, &y, Pick::Cen).unwrap();
+        assert!((s.target - s.stats.xpk).abs() < 1e-12, "{}", s.target);
+        assert!((s.target - 0.1).abs() < 0.2, "{}", s.target);
     }
 }

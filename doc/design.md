@@ -281,10 +281,16 @@ FullFileName_RBV), 온도(`BL5A:TC:*`), suspender용 링
   반치점의 중간(한쪽이 최대점에 붙으면 다른 쪽), COM = Σxy/Σy, xMAX는 첫
   최대점의 x. SPEC C의 `array_op` 원본은 없으므로 빔라인에서 같은 범위의 SPEC
   스캔 값과 비교해 확인한다.
-- **이상점 필터**(`qs/src/screen.rs`): 통계는 Hampel 필터(자신과 양옆
+- **정렬 단계의 검사**(`qs/src/screen.rs`): 통계는 Hampel 필터(자신과 양옆
   2점의 중앙값에서 3σ 넘게 벗어난 점을 그 중앙값으로; σ는 다섯 점의 MAD,
   √중앙값, 스캔 전체 이웃차 MAD 중 큰 것) 뒤의 점으로 계산한다. cscan의 둘째
-  샘플은 다른 샘플보다 약 1.7배 오래 세어 CEN·xMAX를 끌고 간다.
+  샘플은 다른 샘플보다 약 1.7배 오래 세어 CEN·xMAX를 끌고 간다. 그 뒤 25구간
+  평균의 변화가 최대의 10% 미만이거나 구간 잡음의 5배 미만이면(보이지 않음),
+  피크의 최대가 첫·끝 점이거나 양옆 점이 모두 반치 이하면(한 점 폭), 에지가
+  반치에 닿지 않거나 양쪽에서 닿으면 모터를 스캔 전 위치로 되돌리고 plan을
+  실패시킨다. half-cut shold 단계는 CEN 대신 반치 교차점(EDGE)으로 간다: 에지의
+  CEN은 교차점과 평탄부의 잡음 최대점의 중간이라, 빔라인에서 같은 에지를 네 번
+  스캔했을 때 CEN은 0.24, 교차점은 0.007 안에서 움직였다.
 - `umv m CEN; set m 0`은 motor 레코드 이동과 `set_position`(SV_CMD `set`)이다.
 - **데이터 폴더**: 큐 아이템 하나가 폴더 하나 `<root>/<series>/`를 갖는다.
   폴더 이름은 아이템의 `md.series`, 없으면 plan 이름이고, root는 아이템의
@@ -341,10 +347,10 @@ FullFileName_RBV), 온도(`BL5A:TC:*`), suspender용 링
   `all6 0 0 89.7 0 0 0.0`, shold −3.0이다. 검출기는 det이다.
   - direct beam: 스텝 tth −0.04…0.04(24구간, 0.3 s) → CEN, set 0; nu
     −0.10…0.10(16구간, 0.3 s) → CEN, set 0.
-  - half-cut: fly shold −3.0…−1.5(5 s, 0.05 s) → CEN; 상대 fly th ±1.0(5 s,
-    0.03 s) → xMAX, set 0; 상대 fly shold 0.3…−0.3(2 s, 0.05 s) → CEN; 상대 fly
-    th ±2.0(10 s, 0.03 s) → CEN; 상대 스텝 shold ±0.3(18구간, 0.3 s) → CEN; th
-    ±0.6(30구간, 0.5 s) → CEN, set 0; shold ±0.15(20구간, 0.5 s) → CEN.
+  - half-cut: fly shold −3.0…−1.5(5 s, 0.05 s) → EDGE; 상대 fly th ±1.0(5 s,
+    0.03 s) → xMAX, set 0; 상대 fly shold 0.3…−0.3(2 s, 0.05 s) → EDGE; 상대 fly
+    th ±2.0(10 s, 0.03 s) → CEN; 상대 스텝 shold ±0.3(18구간, 0.3 s) → EDGE; th
+    ±0.6(30구간, 0.5 s) → CEN, set 0; shold ±0.15(20구간, 0.5 s) → EDGE.
   - specular: tth 1.2·th 0.6, `atte 4`, 상대 스텝 th ±0.2(120구간, 0.5 s) →
     xMAX, set th 0.6.
   - 끝: `mar345closeshutter`, erase. 단계마다 이전·이후 위치, CEN/FWHM과

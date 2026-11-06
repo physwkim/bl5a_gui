@@ -16,9 +16,8 @@ use serde_json::json;
 
 use crate::ctx::{Ctx, Step, plan_fn};
 use crate::devices::{Axis, Count, Devices, Holder, Live, Scaler, SpecCmd, Table};
-use crate::peak::Stats;
 use crate::plans::run_md;
-use crate::screen::hampel;
+use crate::screen::{Pick, Screened, screen};
 use crate::specfile::SPEC_HEAD;
 
 /// The run key of a scan's documents.
@@ -60,13 +59,10 @@ impl Points {
         self.0.lock().unwrap().push((x, y));
     }
 
-    /// splot's statistics of the points after the outlier filter, which
-    /// the macros read as `CEN`, `pl_COM`, `pl_xMAX`, and how many points
-    /// the filter replaced.
-    pub fn stats(&self) -> Option<(Stats, usize)> {
+    /// The points' statistics and `pick`'s target, or why they give none.
+    pub fn screen(&self, pick: Pick) -> Result<Screened, String> {
         let (x, y): (Vec<f64>, Vec<f64>) = self.0.lock().unwrap().iter().copied().unzip();
-        let (y, rejected) = hampel(&y);
-        Stats::of(&x, &y).map(|s| (s, rejected))
+        screen(&x, &y, pick)
     }
 }
 

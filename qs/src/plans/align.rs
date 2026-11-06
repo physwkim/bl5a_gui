@@ -12,9 +12,10 @@ use bsrs::qs::{PlanFactory, PlanMeta, Registry};
 use serde_json::json;
 
 use super::args::Args;
-use super::{Ops, Pick, item_md, optional, outer, param};
+use super::{Ops, item_md, optional, outer, param};
 use crate::ctx::Step;
 use crate::devices::{Devices, Holder};
+use crate::screen::Pick;
 
 /// coin_align's counter (`plotselect ic1`).
 const COIN_DET: &str = "ic1";
@@ -83,7 +84,7 @@ pub(super) async fn film(ops: &Ops<'_>) -> Step {
     let stages = [
         (
             ops.fly("shold", -3.0, -1.5, 5.0, 0.05, false),
-            Pick::Cen,
+            Pick::Edge,
             None,
         ),
         (
@@ -93,11 +94,15 @@ pub(super) async fn film(ops: &Ops<'_>) -> Step {
         ),
         (
             ops.fly("shold", 0.3, -0.3, 2.0, 0.05, true),
-            Pick::Cen,
+            Pick::Edge,
             None,
         ),
         (ops.fly("th", -2.0, 2.0, 10.0, 0.03, true), Pick::Cen, None),
-        (ops.step("shold", -0.3, 0.3, 18, 0.3, true), Pick::Cen, None),
+        (
+            ops.step("shold", -0.3, 0.3, 18, 0.3, true),
+            Pick::Edge,
+            None,
+        ),
         (
             ops.step("th", -0.6, 0.6, 30, 0.5, true),
             Pick::Cen,
@@ -105,7 +110,7 @@ pub(super) async fn film(ops: &Ops<'_>) -> Step {
         ),
         (
             ops.step("shold", -0.15, 0.15, 20, 0.5, true),
-            Pick::Cen,
+            Pick::Edge,
             None,
         ),
     ];

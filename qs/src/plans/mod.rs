@@ -24,9 +24,9 @@ use serde_json::{Value, json};
 
 use crate::ctx::{Ctx, Step, plan_fn};
 use crate::devices::{CHANNELS, Devices, Holder, Preset, get};
-use crate::peak::Stats;
 use crate::place::{DATA_DIR, Place};
 use crate::scan::{Motion, Scan};
+use crate::screen::{Pick, Screened};
 
 /// What produced the documents.
 fn versions() -> Value {
@@ -149,35 +149,6 @@ fn presets(texpo: f64) -> Vec<Preset> {
         out.push(Preset::Seconds(rest));
     }
     out
-}
-
-/// The statistic an alignment scan's motor goes to.
-#[derive(Clone, Copy, Debug)]
-pub(crate) enum Pick {
-    /// `CEN`
-    Cen,
-    /// `pl_COM`
-    Com,
-    /// `pl_xMAX`
-    XMax,
-}
-
-impl Pick {
-    fn of(self, s: &Stats) -> f64 {
-        match self {
-            Pick::Cen => s.cen,
-            Pick::Com => s.com,
-            Pick::XMax => s.xpk,
-        }
-    }
-
-    fn name(self) -> &'static str {
-        match self {
-            Pick::Cen => "CEN",
-            Pick::Com => "pl_COM",
-            Pick::XMax => "pl_xMAX",
-        }
-    }
 }
 
 /// The macros' verbs for a plan body.
@@ -319,7 +290,9 @@ impl<'a> Ops<'a> {
     }
 
     /// One alignment scan, then `umv m <pick>` and, given `set`, `set m
-    /// set`; a "stages" event records the move and the statistics.
+    /// set`; a "stages" event records the move and the statistics. A scan
+    /// that gives no target puts the motor back where it was and ends the
+    /// plan.
     async fn stage(&self, scan: Scan, pick: Pick, set: Option<f64>) -> Step {
         let axis = scan.axis.clone();
         let m = axis.name().to_string();
@@ -327,13 +300,19 @@ impl<'a> Ops<'a> {
         let before = self.ctx.position(axis.clone()).await?;
         let (plan, points) = scan.plan(self.dev);
         self.ctx.run(plan).await?;
-        let (stats, rejected) = points
-            .stats()
-            .ok_or_else(|| format!("{line}: the scan has no points"))?;
-        let target = pick.of(&stats);
-        if !target.is_finite() {
-            return Err(format!("{line}: {} is {target}", pick.name()));
-        }
+        let Screened {
+            stats,
+            target,
+            rejected,
+        } = match points.screen(pick) {
+            Ok(s) => s,
+            Err(why) => {
+                self.umv(&[(&m, before)])
+                    .await
+                    .map_err(|e| format!("{line}: {why}; moving {m} back to {before}: {e}"))?;
+                return Err(format!("{line}: {why}; {m} back at {before}"));
+            }
+        };
         self.umv(&[(&m, target)]).await?;
         if let Some(pos) = set {
             self.set(&m, pos).await?;

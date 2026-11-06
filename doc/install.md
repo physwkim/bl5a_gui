@@ -549,6 +549,8 @@ Do these in order and go on only when a step matches SPEC.
    scan over the same range (the scan title in the Scan tab gives it) and
    SPEC's `CEN`; a stage whose scan had a point replaced by the outlier
    filter can differ ([usage.md](usage.md#before-a-stage-moves)).
+   Compare an EDGE stage with where SPEC's scan falls through half its
+   maximum, not with SPEC's `CEN`.
 7. **A frame.** Start the integrator
    (`systemctl --user start bl5a-integrator`). Battery, Single shot, a
    short Texpo and a test name. Check

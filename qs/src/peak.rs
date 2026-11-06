@@ -54,25 +54,32 @@ fn com(x: &[f64], y: &[f64]) -> f64 {
     }
 }
 
-/// `calc_hmx`: the half-maximum crossing walking from the maximum in
-/// `dir`, interpolated against the last point above half; the first
-/// neighbour when half is never reached.
-fn hmx(x: &[f64], y: &[f64], dir: isize) -> f64 {
+/// `calc_hmx`'s walk from the maximum in `dir`.
+enum Walk {
+    /// The half-maximum crossing, interpolated against the last point
+    /// above half.
+    Crossed(f64),
+    /// Half is never reached: what `calc_hmx` returns then, the first
+    /// neighbour, or the maximum itself when it is the end point.
+    Not(f64),
+}
+
+fn walk(x: &[f64], y: &[f64], dir: isize) -> Walk {
     let npts = y.len() as isize;
     let mut y1 = max(y);
     let mut i = index(y1, y) as isize + dir;
     if i == npts {
-        return x[x.len() - 1];
+        return Walk::Not(x[x.len() - 1]);
     }
     if i == -1 {
-        return x[0];
+        return Walk::Not(x[0]);
     }
     let x0 = x[i as usize];
     let mut x1 = x0;
     let half = y1 / 2.0;
     loop {
         if (dir > 0 && i >= npts) || (dir < 0 && i < 0) {
-            return x0;
+            return Walk::Not(x0);
         }
         let (xi, yi) = (x[i as usize], y[i as usize]);
         if yi <= half {
@@ -80,11 +87,28 @@ fn hmx(x: &[f64], y: &[f64], dir: isize) -> f64 {
             if dy != 0.0 {
                 x1 -= (x1 - xi) * (y1 - half) / dy;
             }
-            return x1;
+            return Walk::Crossed(x1);
         }
         x1 = xi;
         y1 = yi;
         i += dir;
+    }
+}
+
+/// `calc_hmx`: the half-maximum crossing walking from the maximum in
+/// `dir`, the first neighbour when half is never reached.
+fn hmx(x: &[f64], y: &[f64], dir: isize) -> f64 {
+    match walk(x, y, dir) {
+        Walk::Crossed(v) | Walk::Not(v) => v,
+    }
+}
+
+/// The half-maximum crossing walking from the maximum in `dir`, `None`
+/// when `y` never falls to half on that side.
+pub fn half(x: &[f64], y: &[f64], dir: isize) -> Option<f64> {
+    match walk(x, y, dir) {
+        Walk::Crossed(v) => Some(v),
+        Walk::Not(_) => None,
     }
 }
 
@@ -191,6 +215,16 @@ mod tests {
                     s.com
                 );
             }
+        }
+    }
+
+    #[test]
+    fn half_is_none_where_hmx_falls_back() {
+        // max_first: nothing left of the maximum; half_not_reached_left:
+        // 6 and 8 stay above 5.
+        for &(name, x, y, _) in [&SPLOT[1], &SPLOT[4]] {
+            assert_eq!(half(x, y, -1), None, "{name}");
+            assert_eq!(half(x, y, 1), Some(hmx(x, y, 1)), "{name}");
         }
     }
 

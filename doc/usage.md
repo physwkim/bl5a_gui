@@ -331,16 +331,23 @@ where a value is given, redefines that position with `set`.
 | --- | --- | --- |
 | tth −0.04 to 0.04 | CEN | `set tth 0` |
 | nu −0.1 to 0.1 | CEN | `set nu 0` |
-| shold −3 to −1.5, fly | CEN | |
+| shold −3 to −1.5, fly | EDGE | |
 | th −1 to 1 relative, fly | pl_xMAX | `set th 0` |
-| shold 0.3 to −0.3 relative, fly | CEN | |
+| shold 0.3 to −0.3 relative, fly | EDGE | |
 | th −2 to 2 relative, fly | CEN | |
-| shold −0.3 to 0.3 relative | CEN | |
+| shold −0.3 to 0.3 relative | EDGE | |
 | th −0.6 to 0.6 relative | CEN | `set th 0` |
-| shold −0.15 to 0.15 relative | CEN | |
+| shold −0.15 to 0.15 relative | EDGE | |
 | `uan 1.2 0.6`, `atte 4`, then th −0.2 to 0.2 relative, 120 intervals | pl_xMAX | `set th 0.6` |
 
 It ends with `mar345closeshutter` and an erase of the plate.
+
+EDGE is where a shold scan falls through half its maximum, the height at
+which the sample takes half the beam. `align_in.mac` moves to CEN, which
+for an edge lies halfway between that point and the maximum, and on the
+open-beam plateau the maximum is wherever the noise puts it: over four
+scans of one edge on the beamline CEN moved by 0.24 while the half point
+stayed within 0.007.
 
 ### Before a stage moves
 
@@ -351,6 +358,19 @@ their median and the noise of the whole scan. A cscan's second sample
 counts about 1.7 times as long as the others and is often replaced this
 way; left in, it can be the maximum CEN and pl_xMAX follow. The
 statistics are those of the filtered points.
+
+The stage then puts the motor back where it was before the scan and
+ends the plan, which fails with the reason Messages shows, when
+
+- the scan shows nothing: averaged into 25 bins, it changes by less than
+  10% of its largest bin, or by less than 5 times the noise of a bin;
+- a peak's maximum is the scan's first or last point, or both of its
+  neighbours are at or below half of it (a peak one point wide);
+- an edge never falls to half its maximum, or falls to half on both
+  sides.
+
+A peak that never falls to half inside the scan, such as a rocking curve
+wider than a th scan, still goes to CEN, which is then the maximum.
 
 ### Stages
 
@@ -364,7 +384,7 @@ title names the plan and series. It is cleared when the next
 | Column | Shows | Tooltip |
 | --- | --- | --- |
 | Stage | the scan, as a SPEC command line | |
-| Pick | the statistic the motor was moved to: CEN, pl_COM or pl_xMAX | the target position |
+| Pick | the statistic the motor was moved to: CEN, pl_COM, pl_xMAX or EDGE | the target position |
 | Before → after | the motor before the scan, and after the move and any `set` | |
 | CEN | the centre at half maximum | COM and the position of the maximum |
 | FWHM | the full width at half maximum | |
