@@ -32,7 +32,7 @@ class AllowedTest(unittest.TestCase):
                          {"pause", "stop", "abort", "stop_after_frame"})
         self.assertEqual(opened(qs("executing_queue", "mar_series", "u"), after_frame=True),
                          {"pause", "stop", "abort"})
-        self.assertEqual(opened(qs("executing_queue", "align_film", "u")), {"pause", "stop", "abort"})
+        self.assertEqual(opened(qs("executing_queue", "align", "u")), {"pause", "stop", "abort"})
         self.assertEqual(opened(qs("paused", "mar_series", "u")), {"resume", "stop", "abort"})
 
 

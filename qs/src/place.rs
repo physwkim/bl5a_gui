@@ -115,9 +115,9 @@ mod tests {
         let p = Place::of("mar_series", root, &md(json!({"series": "cell_7"}))).unwrap();
         assert_eq!(p.dir, Path::new("/data/cell_7"));
         assert_eq!(p.spec, Path::new("/data/cell_7/cell_7.spec"));
-        let p = Place::of("align_coin", root, &md(json!({}))).unwrap();
-        assert_eq!(p.dir, Path::new("/data/align_coin"));
-        assert_eq!(p.spec, Path::new("/data/align_coin/align_coin.spec"));
+        let p = Place::of("align", root, &md(json!({}))).unwrap();
+        assert_eq!(p.dir, Path::new("/data/align"));
+        assert_eq!(p.spec, Path::new("/data/align/align.spec"));
     }
 
     #[test]

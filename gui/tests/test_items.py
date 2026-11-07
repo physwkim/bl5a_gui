@@ -279,11 +279,11 @@ class FinishedTest(unittest.TestCase):
 
     def test_first_read_is_the_baseline(self):
         f = items.Finished()
-        self.assertEqual(f.new([archived("a", "align_film", exit_status="success")]), [])
+        self.assertEqual(f.new([archived("a", "align", exit_status="success")]), [])
 
     def test_only_items_not_read_before(self):
         f = items.Finished()
-        a = archived("a", "align_film", exit_status="success")
+        a = archived("a", "align", exit_status="success")
         b = archived("b", "mar_series", exit_status="fail", reason="spec: refused")
         f.new([a])
         self.assertEqual(f.new([a, b]), [b])
@@ -291,14 +291,14 @@ class FinishedTest(unittest.TestCase):
 
     def test_cleared_history(self):
         f = items.Finished()
-        f.new([archived("a", "align_film", exit_status="success")])
+        f.new([archived("a", "align", exit_status="success")])
         self.assertEqual(f.new([]), [])
-        c = archived("c", "align_coin", exit_status="abort")
+        c = archived("c", "align", exit_status="abort")
         self.assertEqual(f.new([c]), [c])
 
     def test_ended_line(self):
-        self.assertEqual(items.ended(archived("a", "align_film", exit_status="success", run_uid="r", reason=None)),
-                         "align_film ended: success")
+        self.assertEqual(items.ended(archived("a", "align", exit_status="success", run_uid="r", reason=None)),
+                         "align ended: success")
         # An item that failed before its plan opened a run has no run_uid.
         self.assertEqual(items.ended(archived("b", "mar_series", exit_status="fail",
                                               reason="plan build failed: texpo")),
