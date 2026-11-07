@@ -44,8 +44,7 @@ integrator and the GUI on one host.
 git clone https://github.com/physwkim/bl5a_gui.git
 ```
 
-The repository is private; clone it with a GitHub account that can read
-it. It holds the SPEC driver and spec-ioc too (`drivers/spec`,
+The repository holds the SPEC driver and spec-ioc too (`drivers/spec`,
 `iocs/spec-ioc`). mar345-ioc and the crates the SPEC driver shares with
 the other epics-rs IOCs (`motor-common`, `ad-mar345`) come from
 https://github.com/epics-rs/epics-rs-iocs at the commit `Cargo.toml`
