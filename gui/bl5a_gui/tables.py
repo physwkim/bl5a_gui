@@ -61,7 +61,7 @@ class StagesTable(_Table):
     """Each stage of the alignment running now: the scan, which statistic
     it took, where the motor was and where the stage left it."""
 
-    HEADERS = ("Stage", "Pick", "Before → after", "CEN", "FWHM", "Set")
+    HEADERS = ("Stage", "Pick", "Before → after", "CEN", "FWHM", "Outliers", "Set")
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -75,9 +75,10 @@ class StagesTable(_Table):
         moved = "{} → {}".format(_fmt(stage.get("before")), _fmt(stage.get("after")))
         self.appendRow(
             (str(stage.get("stage") or ""), str(stage.get("pick") or ""), moved, _fmt(stage.get("cen")),
-             _fmt(stage.get("fwhm"), 3), "" if stage.get("set") is None else _fmt(stage.get("set"))),
+             _fmt(stage.get("fwhm"), 3), _fmt(stage.get("rejected")),
+             "" if stage.get("set") is None else _fmt(stage.get("set"))),
             (None, "target {}".format(_fmt(stage.get("target"))), None,
-             "COM {}, MAX at {}".format(_fmt(stage.get("com")), _fmt(stage.get("xmax"))), None,
+             "COM {}, MAX at {}".format(_fmt(stage.get("com")), _fmt(stage.get("xmax"))), None, None,
              "set {} {} at {}: the user offset moved by {}".format(
                  stage.get("motor"), _fmt(stage.get("set")), _fmt(stage.get("target")),
                  _fmt(stage["target"] - stage["set"])) if stage.get("set") is not None else None))

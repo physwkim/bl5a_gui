@@ -460,6 +460,7 @@ row without alignment.
 | Before → after | the motor before the scan, and after the move and any `set` | |
 | CEN | the centre at half maximum | COM and the position of the maximum |
 | FWHM | the full width at half maximum | |
+| Outliers | how many points the outlier filter replaced | |
 | Set | the value given to `set`, empty when the stage did not set | how far the user offset moved |
 
 The statistics are splot's (`CEN`, `pl_COM`, `pl_xMAX`), the ones SPEC's
