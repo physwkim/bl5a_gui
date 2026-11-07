@@ -1,22 +1,41 @@
 """docs.Documents on document streams bl5a-qs sent against bl5a-sim
 (recorded with qs_t/drive.py, one `["name", doc]` per line): the scans the
-GUI rebuilds give the statistics qs picked its targets from, the history
-row is what the run left in SPEC, and every exposure reaches its run."""
+GUI rebuilds, outlier-filtered, give the statistics qs picked its targets
+from, the history row is what the run left in SPEC, and every exposure
+reaches its run."""
 
 import gzip
 import json
 import math
 import pathlib
+import statistics
 import unittest
 
-from bl5a_gui import docs
+from bl5a_gui import docs, peak
 
 DATA = pathlib.Path(__file__).resolve().parent / "data"
+
+
+def hampel(y):
+    """qs's outlier filter (`hampel` in qs/src/screen.rs), written again
+    from doc/usage.md: the filtered points and how many changed."""
+    def sigma(v):
+        m = statistics.median(v)
+        return 1.4826 * statistics.median([abs(e - m) for e in v])
+
+    floor = sigma([b - a for a, b in zip(y, y[1:])]) / math.sqrt(2)
+    out, replaced = list(y), 0
+    for i, v in enumerate(y):
+        w = y[max(0, i - 2):i + 3]
+        m = statistics.median(w)
+        if abs(v - m) > 3 * max(sigma(w), math.sqrt(max(abs(m), 1.0)), floor):
+            out[i], replaced = m, replaced + 1
+    return out, replaced
 
 # th's user offset change over each recorded run, read from SPEC rather
 # than from the documents: `wm th` before and after prints th's low limit
 # in user units, which moves by the offset change, to 4 decimals.
-WM_DTH0 = {"insitu_step.jsonl.gz": 0.0840, "align_coin.jsonl.gz": None}
+WM_DTH0 = {"insitu_step.jsonl.gz": 0.0796, "align_coin.jsonl.gz": None}
 
 
 def load(name):
@@ -82,7 +101,9 @@ class Alignment(Recorded):
             with self.subTest(stage=stage["stage"]):
                 self.assertEqual(scan.motor, stage["motor"])
                 self.assertTrue(stage["stage"].startswith(scan.title), scan.title)
-                got = scan.stats()
+                y, replaced = hampel(scan.y)
+                self.assertEqual(replaced, stage["rejected"])
+                got = peak.stats(scan.x, y)
                 for key, field in (("xmax", "xpk"), ("ymax", "ymax"), ("com", "com"), ("cen", "cen"),
                                    ("fwhm", "fwhm")):
                     self.assertTrue(same(getattr(got, field), stage[key]), (key, getattr(got, field), stage[key]))
@@ -111,7 +132,7 @@ class InsituReplayTest(Alignment, unittest.TestCase):
 
 class CoinReplayTest(Alignment, unittest.TestCase):
     fixture = "align_coin.jsonl.gz"
-    plan = "align_coin"
+    plan = "align"
 
 
 class MarSeriesReplayTest(Recorded, unittest.TestCase):
@@ -150,7 +171,7 @@ class FailedRunTest(unittest.TestCase):
 
     def test_success_has_no_reason(self):
         r = Replay("align_coin.jsonl.gz")
-        run, row = r.plan_run("align_coin")
+        run, row = r.plan_run("align")
         self.assertEqual((run.reason, row["reason"]), ("", ""))
         self.assertEqual(docs.outcome(run.exit_status, run.reason), "success")
 
