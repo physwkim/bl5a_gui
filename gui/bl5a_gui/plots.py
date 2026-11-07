@@ -10,7 +10,7 @@ from silx.gui import qt
 from silx.gui.colors import Colormap
 from silx.gui.plot import Plot1D, Plot2D
 
-from . import config, docs, mar
+from . import config, docs, mar, peak
 from .vendor.Plot1DCustom import Plot1DCustom
 
 MARKERS = (("cen", "CEN", "#d62728"), ("com", "COM", "#2ca02c"), ("xpk", "MAX", "#1f77b4"))
@@ -103,7 +103,12 @@ class ScanTab(qt.QWidget):
             plot.remove("scan", kind="curve")
         if scan is self.live:
             return
-        st = scan.stats()
+        if stage is None:
+            st = scan.stats()
+        else:
+            # The statistics the stage moved by, of its outlier-filtered points.
+            st = peak.Stats(*(math.nan if stage.get(k) is None else float(stage[k])
+                              for k in ("xmax", "ymax", "com", "cen", "fwhm")))
         if st is None:
             self._say("no points" + (" ({})".format(docs.outcome(scan.exit_status, scan.reason))
                                      if scan.exit_status else ""))
@@ -118,6 +123,8 @@ class ScanTab(qt.QWidget):
             plot.addXMarker(stage["target"], legend="target", text=str(stage.get("pick") or "target"),
                             color="black")
             text += "  → {} {:.5g}".format(stage.get("pick"), stage["target"])
+        if stage is not None and stage.get("rejected"):
+            text += "  ({} outlier{} replaced)".format(stage["rejected"], "" if stage["rejected"] == 1 else "s")
         if scan.exit_status and scan.exit_status != "success":
             text += "  ({})".format(docs.outcome(scan.exit_status, scan.reason))
         self._say(text)

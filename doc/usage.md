@@ -503,10 +503,12 @@ points already drawn fails the scan.
 When the scan ends, the line above the plot gives CEN, FWHM, COM and the
 maximum and its position, and markers are drawn: CEN red, COM green, MAX
 blue, and the stage's target black with the pick's name. In the picture
-the stage picked CEN, so the black target lies on the red CEN line. The
-line and the coloured markers are of the points as taken; where the
-outlier filter replaced a point, the target is of the filtered points
-and can lie off them. A scan that did not end in success shows its exit
+the stage picked CEN, so the black target lies on the red CEN line. A
+stage's scan shows the stage's statistics, of the points after the
+outlier filter, and how many points the filter replaced; the curve is
+the points as taken, so where a point was replaced the markers can lie
+off it. Any other scan shows the statistics of its points as taken. A
+scan that did not end in success shows its exit
 status and why; the whole line is in its tooltip when it does not fit.
 
 The **Scan** list keeps this window's last 100 scans; pick one to look
