@@ -535,7 +535,7 @@ bl5a-qs, bl5a-integrator(시뮬레이션은 bl5a-sim, mar345-ioc 포함)는
 바탕화면 단축키로 띄운다. 설정은 `~/.config/bl5a/bl5a.env` 하나를 서비스
 (`EnvironmentFile=`)와 실행기(`sh`)가 같이 읽는다. IOC는 stdin이 끝나면
 종료하므로 `deploy/ioc-run`이 FIFO를 stdin으로 물려 둔다. qs는 시작할 때
-PV가 없으면 종료하고, systemd가 5초마다 다시 띄워 IOC가 뜨기를 기다린다.
+모든 PV가 연결될 때까지 기다리며, 기다리는 PV를 저널에 남긴다.
 
 ## 단계와 검증
 

@@ -246,9 +246,9 @@ the real LakeShore (section 6, step 7).
 The service `bl5a-qs` runs `bl5a-qs --data-root $BL5A_DATA` on the ports
 of section 1, with the log level `RUST_LOG=info,epics_ca_rs=warn`.
 
-- It exits at start-up when a PV does not connect, naming it in its
-  journal; the service starts it again every 5 s, so it comes up once
-  both IOCs answer.
+- At start-up it waits until every PV connects, naming the PV it waits
+  for in its journal, so it comes up once both IOCs answer; until then
+  the GUI shows qs not answering.
 - It sets `EPICS_CA_PUT_TIMEOUT=1e6` unless set: a monitor-count exposure
   is one put that completes minutes later.
 - `BL5A_DATA` (`--data-root`) is an existing absolute directory without spaces, the
@@ -571,7 +571,7 @@ When every step matches, `systemctl --user enable --now bl5a.target`
 | Symptom | Where to look |
 | --- | --- |
 | A service is failed or keeps restarting | `systemctl --user status 'bl5a*'`, then `journalctl --user -u <service>` |
-| bl5a-qs restarts every 5 s (status `activating (auto-restart)`) | its journal names the PV that does not connect: IOC down or `EPICS_CA_ADDR_LIST` in `bl5a.env` |
+| bl5a-qs is active but the GUI shows qs not answering | its journal's last `waiting for` line names the PV that does not connect: IOC down or `EPICS_CA_ADDR_LIST` in `bl5a.env` |
 | The services stop at logout, or do not start at boot | `sudo loginctl enable-linger <user>` (section 5.1) |
 | The **BL5A** shortcut opens nothing | run `deploy/bl5a-gui` in a terminal for its error; `BL5A_PYTHON` in `bl5a.env` |
 | The desktop icon opens as text, or asks before running | `chmod +x` and the `gio set` lines of section 5.3; on Xfce, again after each edit of the file |

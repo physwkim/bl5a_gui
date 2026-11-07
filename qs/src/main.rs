@@ -26,6 +26,9 @@ mod specfile;
 
 use devices::Devices;
 
+/// The pause between start-up attempts to connect every PV.
+const CONNECT_RETRY: std::time::Duration = std::time::Duration::from_secs(2);
+
 /// Startup error: a PV that did not connect, a socket that would not bind.
 #[derive(Debug)]
 pub struct Error(String);
@@ -108,11 +111,20 @@ async fn run(args: Args) -> i32 {
         eprintln!("bl5a-qs: --data-root {e}");
         return 2;
     }
-    let devices = match Devices::connect().await {
-        Ok(d) => d,
-        Err(e) => {
-            eprintln!("bl5a-qs: {e}");
-            return 2;
+    // The IOCs may come up after qs: wait for them, naming the PV awaited
+    // when it changes, rather than exit as if the arguments were wrong.
+    let mut awaited = String::new();
+    let devices = loop {
+        match Devices::connect().await {
+            Ok(d) => break d,
+            Err(e) => {
+                let e = e.to_string();
+                if e != awaited {
+                    tracing::warn!(target: "bl5a-qs", "waiting for {e}");
+                    awaited = e;
+                }
+                tokio::time::sleep(CONNECT_RETRY).await;
+            }
         }
     };
     let mut reg = Registry::new();
