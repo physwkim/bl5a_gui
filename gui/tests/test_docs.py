@@ -133,7 +133,7 @@ class FailedRunTest(unittest.TestCase):
         stops, scans = [], []
         d = docs.Documents(on_scan_stop=scans.append, on_run_stop=lambda run, row: stops.append((run, row)))
         reason = "spec: Two Theta Angle is too low for UPWARD Geometry."
-        d.feed("start", {"uid": "p", "plan_name": "align_film", "series": "s", "time": 1.0})
+        d.feed("start", {"uid": "p", "plan_name": "align", "sequence": "Thin film", "series": "s", "time": 1.0})
         d.feed("descriptor", {"uid": "pd", "name": "stages", "run_start": "p"})
         d.feed("event", {"descriptor": "pd", "data": {"stage": "lup sy", "motor": "sy", "after": 0.1}})
         d.feed("start", {"uid": "s", "plan_name": "lup", "motors": ["th"], "det": "det"})
@@ -145,6 +145,8 @@ class FailedRunTest(unittest.TestCase):
         self.assertEqual((run.exit_status, run.reason), ("fail", reason))
         self.assertEqual((row["exit"], row["reason"]), ("fail", reason))
         self.assertEqual(docs.outcome(run.exit_status, run.reason), "fail: " + reason)
+        self.assertEqual(docs.what(row["plan"], row["sequence"]), "align: Thin film")
+        self.assertEqual(docs.what("mar_series"), "mar_series")
 
     def test_success_has_no_reason(self):
         r = Replay("align_coin.jsonl.gz")

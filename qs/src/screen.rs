@@ -8,7 +8,7 @@
 use crate::peak::{Stats, half};
 
 /// The statistic an alignment scan's motor goes to.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Pick {
     /// `CEN` of a peak.
     Cen,

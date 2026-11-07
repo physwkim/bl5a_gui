@@ -5,7 +5,7 @@ import time
 
 from silx.gui import qt
 
-from . import items
+from . import docs, items
 from .vendor.QueueView import QueueView
 
 
@@ -69,7 +69,7 @@ class StagesTable(_Table):
 
     def start(self, run):
         self.setRowCount(0)
-        self.caption = "Stages — {} ({})".format(run.plan, run.series)
+        self.caption = "Stages — {} ({})".format(docs.what(run.plan, run.start.get("sequence")), run.series)
 
     def add(self, stage):
         moved = "{} → {}".format(_fmt(stage.get("before")), _fmt(stage.get("after")))
@@ -92,5 +92,6 @@ class HistoryTable(_Table):
 
     def add(self, row):
         when = time.strftime("%m-%d %H:%M", time.localtime(row["time"]))
-        self.appendRow((when, row["series"], row["plan"], _fmt(row["T"]), _fmt(row["sy"]), _fmt(row["shold"]),
-                        _fmt(row["dth0"], 4), row["exit"]), (None,) * 7 + (row["reason"] or None,))
+        self.appendRow((when, row["series"], docs.what(row["plan"], row["sequence"]), _fmt(row["T"]),
+                        _fmt(row["sy"]), _fmt(row["shold"]), _fmt(row["dth0"], 4), row["exit"]),
+                       (None,) * 7 + (row["reason"] or None,))

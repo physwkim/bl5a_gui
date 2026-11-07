@@ -40,7 +40,7 @@ the integrator, so it shows every stack it holds.
 | Area | What is in it |
 | --- | --- |
 | Top | the run buttons (Pause, Resume, Stop, Abort) and the status line |
-| Left | motors, the Data and Integration boxes, the alignment buttons, the Battery and In-situ forms |
+| Left | motors, the Data and Integration boxes, the Alignment box, the Battery and In-situ forms |
 | Centre | the Scan, Image and Stack tabs |
 | Right | the queue, the stages of the running alignment, the alignment history |
 | Bottom | the SPEC console, the Commands the plans sent, the GUI's Messages |
@@ -137,7 +137,7 @@ scans and frames land together:
 ```
 <data root>/
   cell7/
-    cell7.spec              the align_coin scans
+    cell7.spec              the alignment scans
     cell7_0001.mar3450 …    the frames
     cell7.h5                the stack
   film_A/
@@ -204,9 +204,9 @@ rest wait in order.
 | Column | Shows |
 | --- | --- |
 | # | the place in the queue |
-| Plan | `mar_series`, `align_coin`, `align_film` or `insitu_step` |
+| Plan | `mar_series`, `align` or `insitu_step` |
 | Name | the frame file name, when the plan takes frames |
-| Parameters | the item's arguments, for example `T=30 ramp=10 wait=True tolerance=0.5 soak=5/1 align=True texpo=-70000 th_list=-0.05/0.11/0.13/0.15` |
+| Parameters | the item's arguments, for example `sequence='Thin film' T=30 ramp=10 wait=True tolerance=0.5 soak=5/1 texpo=-70000 th_list=-0.05/0.11/0.13/0.15` |
 | Folder | where the item's data goes: `<data root>/<series>`, or the series alone when the item goes to bl5a-qs's `--data-root` |
 | User | the `--user` that queued it |
 
@@ -302,30 +302,102 @@ status line says "stopping after the frame" in the meantime.
 
 ## Alignment
 
-![The alignment buttons](img/alignment.png)
+![The Alignment box](img/alignment.png)
 
-**Series** groups the runs in the alignment history, is stored with the
-run and names the data folder its scans go to. Empty means each run
-stands on its own, and its scans go to the folder `align_coin` or
-`align_film`.
+An alignment is a sequence of blocks run in order. Two sequences come
+with the GUI and are read-only: **Coin cell**, SPEC's `coin_align`, and
+**Thin film**, SPEC's `align_in.mac`. Each user's own sequences are
+kept in the Data folder, one file each,
+`<data folder>/alignments/<user>/<name>.json`.
 
-**Coin cell** queues `align_coin`, SPEC's `coin_align`:
+The box names the sequence last loaded and how many blocks it has; the
+GUI starts with Thin film. Its blocks are edited in a window of their
+own, [Blocks](#the-blocks-window).
+
+| Field | What it does |
+| --- | --- |
+| Coin cell, Thin film | loads that sequence's blocks and opens the Blocks window |
+| Load… | the same for one of the User's saved sequences, picked from its menu |
+| User | whose sequences Load…, Save and Delete use; type a name, or pick one that has saved sequences |
+| Blocks… | opens the Blocks window again |
+| Series | groups the runs in the alignment history, is stored with the run and names the data folder its scans go to; empty means each run stands on its own, its scans in the folder `align` |
+| Queue | queues the plan `align` with the blocks loaded, changed or not |
+
+The name has `*` after it while the blocks have unsaved changes.
+Queued so, the run records the name with "(edited)", for example
+`Thin film (edited)`. The item carries the blocks, so a change made
+after queueing does not change the queued item. Loading
+another sequence, or closing the GUI, asks before dropping unsaved
+changes. Every alignment ends by recording sx, sy, shold, th and phi;
+the history shows sy and shold.
+
+### The Blocks window
+
+![The Blocks window](img/blocks-window.png)
+
+Each row is one block: its number (#), then the SPEC line it sends, or
+the scan it runs as the Stages table names it with the counter and
+where the motor goes, then its note. A loop's blocks are under it,
+indented and numbered inside it: 4.2 is block 2 of the loop block 4, as
+an error names it ("block 4 (loop) block 2 (scan): …"). Closing the window keeps
+the blocks loaded.
+
+Select a row, or neighbouring rows in one list (Shift-click); a
+selected loop counts with the blocks inside it. Then:
+
+| Button | What it does |
+| --- | --- |
+| Add | a new block of the kind picked from its menu, after the selected ones, in their list |
+| Edit… | the current block's form (or double-click the row) |
+| Duplicate, Remove | copies or removes the selected blocks; a loop left with none goes too |
+| Up, Down | moves them one place within their list |
+| Loop… | puts the selected blocks into one loop block that runs them in order, the number of times asked |
+| Ungroup | puts the selected loop's blocks in its place, run once; its times, Only when and note go |
+| Save | writes the sequence under its name; not for Coin cell or Thin film |
+| Save as… | writes it as the user's under a new name; asks before replacing one |
+| Delete | deletes the user's saved sequence and loads Thin film |
+| Close | closes the window |
+
+Saving needs a Data folder and a User. A name is 1 to 64 characters,
+not starting with `.`, without `/` or `\`, and not Coin cell or Thin film.
+
+![A scan block](img/block.png)
+
+| Block | Fields | What it does |
+| --- | --- | --- |
+| scan | type, motor, start, finish, time; intervals and settle (ascan, lup) or sleep (cscan, clup); counter; go to; set to | scans, checks the scan ([Before a stage moves](#before-a-stage-moves)), moves the motor to the statistic picked in go to and, when set to has a value, redefines that position with `set`; ascan and cscan are absolute, lup and clup relative to where the motor is |
+| move | motor position pairs, `tth 1 th 0` | `umv` of them together |
+| spec | one command line | sends it to SPEC |
+| wait | seconds | waits |
+| erase | | erases the mar345 plate |
+| loop | times | runs its blocks in order, that many times over; made with Loop…, its blocks edited in the list; loops may hold loops |
+
+Any block can also have **Only when**, for example `martran < 1200`: the
+block runs only while the motor is below (`<`) or above (`>`) the value;
+a loop's is checked once, before it starts.
+**OK** checks the block as bl5a-qs will and names the field that breaks
+a rule. Each scan block is one row of [Stages](#stages).
+
+### Coin cell
+
+SPEC's `coin_align`:
 
 1. `marshut` to 0, `mon1_setup 1050 100 300 3.0 1.0`, `setkappa 50`,
    `counters 2 5`, `fi 1 0 0 0`, `fil 0 0 0 0`.
 2. A fly scan of sy from −2.5 to 2.5 on ic1; sy goes to pl_COM.
 3. A fly scan of shold from −2 to 2; shold goes to pl_COM.
 4. `mar345closeshutter`, the plate is erased, `marshut` to 340.
-5. The positions of sx, sy, shold, th and phi are recorded.
 
 `coin_align` ends with `mar_ip` without arguments, which only prints its
-usage in SPEC, so the plan does not send it.
+usage in SPEC, so the sequence does not send it.
 
-**Thin film** queues `align_film`, SPEC's `align_in.mac`. It sets the
-slits, attenuators and counters, moves to the direct beam
-(`uan 1 0`, `all6 0 0 89.7 0 0 0.0`, `shold` to −3) and then runs these
-stages. Each stage scans, moves the motor to the picked statistic and,
-where a value is given, redefines that position with `set`.
+### Thin film
+
+SPEC's `align_in.mac`. It sets the slits, attenuators and counters
+(`mar_ip_mode off` only when martran is below 1200), moves to the direct
+beam (`uan 1 0`, `all6 0 0 89.7 0 0 0.0`, `shold` to −3) and then runs
+these stages. Each stage scans, moves the motor to the picked statistic
+and, where a value is given, redefines that position with `set`.
 
 | Stage | Pick | Then |
 | --- | --- | --- |
@@ -374,12 +446,12 @@ wider than a th scan, still goes to CEN, which is then the maximum.
 
 ### Stages
 
-![The stages of an align_film run](img/stages-film.png)
+![The stages of a Thin film run](img/stages-film.png)
 
 The Stages table shows each stage of the alignment running now. Its
-title names the plan and series. It is cleared when the next
-`align_coin`, `align_film` or `insitu_step` starts, including an
-`insitu_step` row without alignment.
+title names the plan, the sequence and the series. It is cleared when
+the next `align` or `insitu_step` starts, including an `insitu_step`
+row without alignment.
 
 | Column | Shows | Tooltip |
 | --- | --- | --- |
@@ -398,14 +470,13 @@ macros read, of the points after the outlier filter (see
 
 ![The alignment history](img/history.png)
 
-One row per finished run that carried alignment stages (or, for the coin
-cell, its recorded positions):
+One row per finished run that aligned:
 
 | Column | Shows |
 | --- | --- |
 | Time | when the run started |
 | Series | the series it was queued in |
-| Plan | `align_coin`, `align_film` or `insitu_step` |
+| Plan | `align` or `insitu_step`, with the sequence it ran |
 | T | the `insitu_step` setpoint, °C |
 | sy, shold | where the run left them |
 | Δth0 | how far this run moved th's zero |
@@ -459,20 +530,22 @@ The In-situ form is SPEC's `myinsitu` as a table. Each row is one
 | soak n | empty | `loopscan` points while soaking |
 | soak t | empty | seconds per soak point |
 | tol | 0.3 | with wait: how close to T counts as reached, °C (`changec`'s `DELTA_K`) |
-| align | on | run `align_in.mac` (the Thin film alignment) before the frames |
+| align | on | run the Alignment sequence before the frames |
 | th list | -0.05, 0.11, 0.13, 0.15 | one frame at each th, comma separated; empty takes no frames |
 | texpo | -70000 | seconds (> 0) or monitor counts (< 0) |
 | name | empty | the frames' file name |
 
 **Series** names the data folder and stack of every row; empty means
-the first row's name.
+the first row's name. **Alignment** is the sequence each row with align
+runs: Thin film, or one of the Alignment box's user's sequences.
 
 One row runs, in order:
 
 1. Temperature, only the parts filled in: `qdo` of the beamline's
    `temperature.mac`, `set_ramp <ramp>`, then `settemp T`, or with wait
    `changec T` with `DELTA_K` set to tol, then `loopscan n t`.
-2. With align: the Thin film alignment above.
+2. With align: the Alignment sequence ([Thin film](#thin-film) unless
+   another is picked).
 3. With a th list: `mymar_in`. If tth is below 40 it first closes the
    shutter and moves through `uan 45 0` to the in-situ positions. Then
    `uan 81 0`, `counters 2 3`, `fi 1 0 0 0`, `ic_range 5`,
@@ -583,7 +656,9 @@ from bl5a-qs and the integrator. A request bl5a-qs refuses also opens a
 ## Walkthrough: a battery cycle
 
 1. Mount the coin cell. Check the **Data** folder. In **Alignment**,
-   type a series (for example the cell's name) and click **Coin cell**.
+   click **Coin cell** (or **Load…** a sequence of your own); its blocks
+   open in the Blocks window, to change or just close. Type a series
+   (for example the cell's name) and click **Queue**.
 2. Click **Start** in the queue. The Scan tab draws the sy and shold fly
    scans; the history gets a row with the sy and shold the run left.
 3. With the queue idle, type `umv tth 81` in the SPEC console.
@@ -602,7 +677,7 @@ from bl5a-qs and the integrator. A request bl5a-qs refuses also opens a
 
 1. Mount the film. Check the **Data** folder and, for the detector
    position `mymar_in` uses, the **Integration** PONI. On the
-   **In-situ** form, type the series.
+   **In-situ** form, type the series and pick the Alignment sequence.
 2. Fill one row per temperature: T, ramp, wait and tol, a soak if
    wanted, align, the th list, texpo and the file name. Add the
    **Cooling row** last.
@@ -636,7 +711,8 @@ scan find?".
 | `messages`, `spec_log`, `commands` | the three logs | Messages, SPEC, Commands |
 | `frame_image` | the last frame, or a named one, as a picture | Image tab |
 | `integration`, `stacks`, `stack` | the integrator's PONI and npt; the stacks; one stack's rows | Integration, Stack tab |
-| `queue_alignment`, `queue_mar_series`, `queue_insitu` | queue items | Alignment buttons, Battery form, In-situ form |
+| `alignment_sequences`, `alignment_sequence`, `save_alignment_sequence` | a user's sequences; one sequence's blocks; save one as the user's | Alignment box: Load…; Blocks window: Save as… |
+| `queue_alignment`, `queue_mar_series`, `queue_insitu` | queue items | Alignment Queue, Battery form, In-situ form |
 | `queue_remove`, `queue_move`, `queue_clear`, `queue_start`, `queue_stop`, `queue_autostart`, `environment_open`, `environment_close` | edit and run the queue | the queue's buttons |
 | `pause`, `resume`, `stop`, `abort`, `stop_after_frame` | end or hold the running plan | Run buttons, Stop after frame |
 | `tweak` | move a motor by a step | Motors ◀ ▶ |

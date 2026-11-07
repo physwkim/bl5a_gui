@@ -1,5 +1,6 @@
 //! The exposures: mymar1/mymar (`mar_series`) and a step of myinsitu
-//! (`insitu_step`: the temperature macros, align_in.mac, then mymar_in).
+//! (`insitu_step`: the temperature macros, an alignment sequence, then
+//! mymar_in).
 
 use std::path::Path;
 use std::sync::Arc;
@@ -8,12 +9,13 @@ use std::time::Instant;
 use bsrs::qs::{PlanFactory, PlanMeta, Registry};
 use serde_json::json;
 
-use super::align::{self, FILM_DET, FILM_SETTLE};
 use super::args::Args;
-use super::{Ops, exposure, file_name, item_md, optional, outer, param};
+use super::{Ops, blocks, exposure, file_name, item_md, optional, outer, param};
 use crate::ctx::Step;
 use crate::devices::Devices;
 
+/// The counter the frames' macros plot (align_in.mac's `plotselect det`).
+const DET: &str = "det";
 /// mymar's three `mar_ip7` lines.
 const GEOMETRIES: [(&str, &str); 3] = [
     ("standard", "-85 435 100 330 50 1.2 -6.8"),
@@ -237,7 +239,7 @@ fn register_series(reg: &mut Registry, devices: &Devices, root: &Path) {
         };
         let extra = json!({
             "detectors": ["scaler"],
-            "det": FILM_DET,
+            "det": DET,
             "name": s.name,
             "ti": ti,
             "texpo": texpo,
@@ -251,9 +253,7 @@ fn register_series(reg: &mut Registry, devices: &Devices, root: &Path) {
             &dev.clone(),
             md,
             place.clone(),
-            move |ctx| async move {
-                series(&Ops::new(&ctx, &dev, &place, FILM_DET, FILM_SETTLE), &s).await
-            },
+            move |ctx| async move { series(&Ops::new(&ctx, &dev, &place), &s).await },
         ))
     });
     let geometries: Vec<_> = GEOMETRIES.iter().map(|(k, _)| *k).collect();
@@ -298,7 +298,8 @@ fn register_insitu(reg: &mut Registry, devices: &Devices, root: &Path) {
         "wait",
         "tolerance",
         "soak",
-        "align",
+        "blocks",
+        "sequence",
         "th_list",
         "texpo",
         "name",
@@ -308,7 +309,14 @@ fn register_insitu(reg: &mut Registry, devices: &Devices, root: &Path) {
     let factory: PlanFactory = Arc::new(move |_reg, raw| {
         let args = Args::parse(PLAN, NAMES, raw)?;
         let temp = Temperature::parse(PLAN, &args)?;
-        let align = args.bool_or("align", true)?;
+        let given = args
+            .given("blocks")
+            .then(|| args.value("blocks"))
+            .transpose()?;
+        let align = match &given {
+            Some(v) => blocks::parse(PLAN, v)?,
+            None => Vec::new(),
+        };
         let th_list = if args.given("th_list") {
             args.f64_list("th_list")?
         } else {
@@ -329,13 +337,14 @@ fn register_insitu(reg: &mut Registry, devices: &Devices, root: &Path) {
         };
         let extra = json!({
             "detectors": ["scaler"],
-            "det": FILM_DET,
+            "det": DET,
             "T": t,
             "ramp": temp.ramp,
             "wait": wait,
             "tolerance": tolerance,
             "soak": temp.soak,
-            "align": align,
+            "sequence": args.str_opt("sequence")?,
+            "blocks": given,
             "th_list": th_list,
             "texpo": texpo,
             "name": name,
@@ -347,12 +356,12 @@ fn register_insitu(reg: &mut Registry, devices: &Devices, root: &Path) {
             md,
             place.clone(),
             move |ctx| async move {
-                let ops = Ops::new(&ctx, &dev, &place, FILM_DET, FILM_SETTLE);
+                let ops = Ops::new(&ctx, &dev, &place);
                 for line in temp.commands() {
                     ops.spec(&line).await?;
                 }
-                if align {
-                    align::film(&ops).await?;
+                if !align.is_empty() {
+                    blocks::run(&ops, &align).await?;
                 }
                 match name {
                     Some(name) => mymar_in(&ops, &name, &th_list, texpo).await,
@@ -367,7 +376,8 @@ fn register_insitu(reg: &mut Registry, devices: &Devices, root: &Path) {
         PlanMeta {
             description: Some(
                 "A step of myinsitu: set_ramp, settemp or changec, loopscan (temperature.mac), \
-                 align_in.mac (align), then mymar_in (a frame per th_list)."
+                 an alignment sequence (blocks, align_in.mac's by default in the GUI), then \
+                 mymar_in (a frame per th_list)."
                     .into(),
             ),
             parameters: vec![
@@ -393,7 +403,18 @@ fn register_insitu(reg: &mut Registry, devices: &Devices, root: &Path) {
                     ),
                     "None",
                 ),
-                optional(param("align", "bool", "Run align_film first."), "True"),
+                optional(
+                    param(
+                        "blocks",
+                        "list",
+                        "An alignment sequence's blocks, run first; None or [] for none.",
+                    ),
+                    "None",
+                ),
+                optional(
+                    param("sequence", "str", "The sequence's name, recorded."),
+                    "None",
+                ),
                 optional(
                     param("th_list", "list", "th of each frame; [] for none."),
                     "[-0.05, 0.11, 0.13, 0.15]",

@@ -4,7 +4,7 @@ import anyio
 import numpy as np
 import pytest
 
-from bl5a_gui import items, mcpserver
+from bl5a_gui import items, mcpserver, sequences
 from bl5a_gui.mcpserver import InsituRow, Log, binned, clean
 
 
@@ -67,7 +67,8 @@ def test_insitu_row_queues_what_the_table_queues():
     sent = [r.model_dump(exclude_unset=True) for r in rows]
     table = [dict(items.NEW_ROW, T=150, ramp=5, wait=True, name="a"),
              dict(items.NEW_ROW, th_list=[], align=False, soak_n=10, soak_t=1)]
-    assert items.insitu_items(sent, "s") == items.insitu_items(table, "s")
+    seq = ("Thin film", sequences.get("Thin film"))
+    assert items.insitu_items(sent, "s", seq) == items.insitu_items(table, "s", seq)
 
 
 def test_insitu_row_refuses_unknown_columns():
@@ -81,12 +82,16 @@ def test_tools_and_their_arguments():
     tools = {t.name: t for t in anyio.run(mcpserver.build(bl).list_tools)}
     assert set(tools) == {
         "status", "queue", "history", "motors", "scans", "scan", "alignment", "messages", "spec_log", "commands",
-        "integration", "stacks", "stack", "frame_image", "spec_result", "queue_alignment", "queue_mar_series",
+        "integration", "stacks", "stack", "frame_image", "spec_result", "alignment_sequences", "alignment_sequence",
+        "save_alignment_sequence", "queue_alignment", "queue_mar_series",
         "queue_insitu", "queue_remove", "queue_move", "queue_clear", "queue_start", "queue_stop",
         "queue_autostart", "environment_open", "environment_close", "pause", "resume", "stop", "abort",
         "stop_after_frame", "tweak", "spec_command", "spec_abort", "integration_set"}
     mar = tools["queue_mar_series"].input_schema
     assert set(mar["required"]) == {"name", "texpo", "beamstop_in_place"}
+    assert tools["queue_alignment"].input_schema["required"] == ["sequence"]
+    assert set(tools["save_alignment_sequence"].input_schema["required"]) == {"name", "blocks"}
+    assert tools["alignment_sequences"].annotations.read_only_hint
     assert tools["messages"].description.startswith("What the GUI's Messages tab shows")
     assert set(tools["messages"].input_schema["properties"]) == {"since", "limit"}
     assert tools["status"].annotations.read_only_hint

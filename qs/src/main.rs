@@ -1,6 +1,6 @@
 //! `bl5a-qs` — the bsrs queue server for BL5A: the coin-cell and
 //! thin-film macros (coin_align, mymar1/mymar, align_in.mac, mymar_in) as
-//! four plans over spec-ioc and mar345-ioc.
+//! three plans over spec-ioc and mar345-ioc.
 //!
 //! ```sh
 //! cargo run -p bl5a-qs -- --data-root /data/bl5a

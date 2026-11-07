@@ -1,0 +1,17 @@
+{
+  "blocks": [
+    {"kind": "move", "moves": [["marshut", 0]], "note": "shut 0"},
+    {"kind": "spec", "command": "mon1_setup 1050 100 300 3.0 1.0"},
+    {"kind": "spec", "command": "setkappa 50"},
+    {"kind": "spec", "command": "counters 2 5"},
+    {"kind": "spec", "command": "fi 1 0 0 0"},
+    {"kind": "spec", "command": "fil 0 0 0 0"},
+    {"kind": "scan", "type": "clup", "motor": "sy", "start": -2.5, "finish": 2.5, "time": 12.5, "sleep": 0.1,
+     "counter": "ic1", "pick": "COM"},
+    {"kind": "scan", "type": "clup", "motor": "shold", "start": -2, "finish": 2, "time": 10.5, "sleep": 0.1,
+     "counter": "ic1", "pick": "COM"},
+    {"kind": "spec", "command": "mar345closeshutter"},
+    {"kind": "erase"},
+    {"kind": "move", "moves": [["marshut", 340]], "note": "shut 340"}
+  ]
+}

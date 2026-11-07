@@ -25,7 +25,7 @@ re-integration, no macros outside the two flows.
   spec-ioc       motors, scaler and command records over SPEC   BL5A:SPEC:*
   mar345-ioc     ADmar345 (the beamline already runs one)       BL5A:MAR345:*
           │ Channel Access
-  bl5a-qs        bsrs queue server: the four plans
+  bl5a-qs        bsrs queue server: the three plans
           │ documents (ZMQ PUB) ──── bl5a-integrator (rsFAI) ── stacks (REP), new rows (PUB)
           │ control (ZMQ REP)                 │
   GUI (Python Qt) ────────────────────────────┘
@@ -40,7 +40,7 @@ in the GUI.
 | Path | What it is |
 | --- | --- |
 | `sim/` | `bl5a-sim`: a SPEC server and a mar345dtb over one simulated beamline |
-| `qs/` | `bl5a-qs`: the bsrs queue server with the plans `align_coin`, `align_film`, `mar_series`, `insitu_step` |
+| `qs/` | `bl5a-qs`: the bsrs queue server with the plans `align` (a block sequence), `mar_series`, `insitu_step` |
 | `integrator/` | `bl5a-integrator`: integrates each frame, keeps one HDF5 stack per series and q axis in the series' data folder |
 | `drivers/spec/` | the SPEC server protocol (`protocol/`, shared with bl5a-sim) and the SPEC client asyn driver (`driver/`) |
 | `iocs/spec-ioc/` | `spec-ioc`: SPEC's motors, counters and command line as EPICS records |

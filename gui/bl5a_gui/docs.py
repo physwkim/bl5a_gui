@@ -16,7 +16,7 @@ from . import peak
 STEP_SCANS = ("ascan", "lup")
 FLY_SCANS = ("cscan", "clup")
 # The plans whose runs carry alignment stages.
-ALIGNING = ("align_coin", "align_film", "insitu_step")
+ALIGNING = ("align", "insitu_step")
 
 
 @dataclass
@@ -72,6 +72,12 @@ class Run:
     reason: str = ""
 
 
+def what(plan, sequence=None):
+    """A plan as the GUI names it, with the alignment sequence it ran:
+    "align: Thin film"."""
+    return "{}: {}".format(plan, sequence) if sequence else plan
+
+
 def outcome(exit_status, reason=None):
     """An exit status with the reason the run or item ended so, if any."""
     return "{}: {}".format(exit_status, reason) if reason else exit_status
@@ -83,8 +89,8 @@ def history_row(run):
 
     `dth0` is the correction this run made to th's zero, the sum of
     (target − set) over the th stages that redefined th; SPEC's dial is not
-    published, so the absolute offset is not known here. A coin
-    alignment's positions are its "final" event's."""
+    published, so the absolute offset is not known here. The positions
+    are the "final" event's, which every alignment records."""
     if not run.stages and not run.final:
         return None
     last = {}
@@ -98,6 +104,7 @@ def history_row(run):
     return {
         "series": run.series,
         "plan": run.plan,
+        "sequence": run.start.get("sequence"),
         "time": run.time,
         "T": run.start.get("T"),  # insitu_step's setpoint
         "sy": final.get("sy", last.get("sy")),

@@ -3,13 +3,15 @@ queues one. No Qt.
 
 bl5a-qs accepts any item into its queue and checks the arguments only when
 the item runs, so a bad item fails mid-queue; the forms check here first.
-Each check is qs's own rule (qs/src/plans/{mod,mar}.rs) or, where noted,
-the macro's stricter one (mymar's header: Ti > 2.5 min, Texpo 1–20 s)."""
+Each check is qs's own rule (qs/src/plans/{mod,mar,blocks}.rs) or, where
+noted, the macro's stricter one (mymar's header: Ti > 2.5 min, Texpo 1–20
+s)."""
 
 import math
 import posixpath
 import unicodedata
 
+from . import config
 from .docs import outcome
 
 GEOMETRIES = ("standard", "high_q_asymm", "low_q_symmetric")
@@ -152,12 +154,14 @@ def mar_series(name, texpo, geometry="standard", n=1, ti=None, series=None):
     return plan_item("mar_series", **kwargs)
 
 
-def insitu_step(name=None, align=True, th_list=TH_LIST, texpo=IN_TEXPO, series=None, T=None, ramp=None,
-                wait=False, tolerance=None, soak=None):
+def insitu_step(name=None, blocks=None, sequence=None, th_list=TH_LIST, texpo=IN_TEXPO, series=None, T=None,
+                ramp=None, wait=False, tolerance=None, soak=None):
     """One row of the in-situ table: myinsitu's set_ramp → settemp (changec
-    with wait) → loopscan → align_in.mac → mymar_in. `tolerance` goes with
-    wait only, as qs takes it."""
-    kwargs = {"align": bool(align)}
+    with wait) → loopscan → the alignment sequence `blocks` (none when
+    None) → mymar_in. `tolerance` goes with wait only, as qs takes it."""
+    kwargs = {}
+    if blocks is not None:
+        kwargs.update(alignment(blocks, sequence))
     th_list = [number(v, "th") for v in th_list]
     kwargs["th_list"] = th_list
     kwargs["texpo"] = exposure(texpo)
@@ -191,7 +195,7 @@ def insitu_step(name=None, align=True, th_list=TH_LIST, texpo=IN_TEXPO, series=N
             raise Invalid("soak t: seconds per point, positive, got {:g}".format(t))
         temp["soak"] = [int(n), t]
     kwargs.update(temp)
-    if not align and not th_list and not temp:
+    if blocks is None and not th_list and not temp:
         raise Invalid("the row does nothing: no alignment, no th list, no temperature")
     md = series_md(series)
     if md:
@@ -209,10 +213,11 @@ def _blank(v):
     return v is None or (isinstance(v, str) and not v.strip())
 
 
-def insitu_row(row, series):
-    """One in-situ table row as its insitu_step item. A key left out takes
-    NEW_ROW's value, a blank cell is None, and the tolerance counts only
-    with wait, as the table always shows one."""
+def insitu_row(row, series, sequence=None):
+    """One in-situ table row as its insitu_step item, running `sequence`
+    ((name, blocks)) when its align is on. A key left out takes NEW_ROW's
+    value, a blank cell is None, and the tolerance counts only with wait,
+    as the table always shows one."""
     unknown = sorted(set(row) - set(NEW_ROW))
     if unknown:
         raise Invalid("unknown column(s) {}; the columns are {}".format(", ".join(unknown), ", ".join(NEW_ROW)))
@@ -227,17 +232,23 @@ def insitu_row(row, series):
         raise Invalid("soak: both n and t, or neither")
     th = row["th_list"]
     wait = bool(row["wait"])
+    picked, run = None, None
+    if row["align"]:
+        if sequence is None:
+            raise Invalid("align: no alignment sequence picked")
+        picked, run = sequence
     return insitu_step(
-        name=get("name"), align=row["align"], th_list=numbers(th, "th list") if isinstance(th, str) else th,
+        name=get("name"), blocks=run, sequence=picked, th_list=numbers(th, "th list") if isinstance(th, str) else th,
         texpo=row["texpo"].strip() if isinstance(row["texpo"], str) else row["texpo"], series=series,
         T=get("T"), ramp=get("ramp"), wait=wait, tolerance=get("tolerance") if wait else None,
         soak=None if soak_n is None else (soak_n, soak_t))
 
 
-def insitu_items(rows, series=None):
+def insitu_items(rows, series=None, sequence=None):
     """The in-situ table as items, in its order and all in one series:
-    `series`, or when empty the first row name there is. Invalid names
-    the first bad row."""
+    `series`, or when empty the first row name there is; the rows with
+    align on run `sequence` ((name, blocks)). Invalid names the first bad
+    row."""
     rows = list(rows)
     if not rows:
         raise Invalid("the table has no rows")
@@ -249,7 +260,7 @@ def insitu_items(rows, series=None):
     out = []
     for k, row in enumerate(rows, 1):
         try:
-            out.append(insitu_row(row, series))
+            out.append(insitu_row(row, series, sequence))
         except Invalid as e:
             raise Invalid("row {}: {}".format(k, e))
     return out
@@ -262,11 +273,164 @@ def cooling_row():
             "th_list": [], "name": ""}
 
 
-def align(plan, series=None):
-    if plan not in ("align_coin", "align_film"):
-        raise Invalid("alignment: align_coin or align_film, got {!r}".format(plan))
+# An alignment's blocks, as qs/src/plans/blocks.rs takes them.
+KINDS = ("scan", "move", "spec", "wait", "erase", "loop")
+# The scan types: type → fly (cscan, clup) or step (ascan, lup).
+SCAN_TYPES = {"ascan": False, "lup": False, "cscan": True, "clup": True}
+PICKS = ("CEN", "COM", "xMAX", "EDGE")
+COUNTERS = ("icxrd", "det", "ic1")
+
+
+class _Fields:
+    """One block's fields, each taken once; what is left over is an error."""
+
+    def __init__(self, at, block):
+        self.at, self.block, self.taken = at, block, set()
+
+    def err(self, what):
+        return Invalid("{}: {}".format(self.at, what))
+
+    def take(self, key):
+        self.taken.add(key)
+        return self.block.get(key)
+
+    def need(self, key):
+        v = self.take(key)
+        if v is None:
+            raise self.err("{} is missing".format(key))
+        return v
+
+    def num(self, key, ok=None, rule=None):
+        v = self.need(key)
+        if isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v):
+            raise self.err("{} must be a number, got {!r}".format(key, v))
+        if ok is not None and not ok(v):
+            raise self.err("{} must be {}, got {:g}".format(key, rule, v))
+        return v
+
+    def text(self, key):
+        v = self.need(key)
+        if not isinstance(v, str):
+            raise self.err("{} must be a string, got {!r}".format(key, v))
+        return v
+
+    def one_of(self, key, names):
+        v = self.need(key)
+        if not isinstance(v, str) or v not in names:
+            raise self.err("{} must be one of {}, got {!r}".format(key, ", ".join(names), v))
+        return v
+
+    def done(self):
+        extra = sorted(set(self.block) - self.taken)
+        if extra:
+            raise self.err("unknown field {}".format(extra[0]))
+
+
+def _scan(f):
+    fly = SCAN_TYPES[f.one_of("type", tuple(SCAN_TYPES))]
+    f.one_of("motor", config.MOTORS)
+    f.num("start")
+    f.num("finish")
+    f.num("time", lambda t: t > 0, "seconds > 0")
+    if fly:
+        f.num("sleep", lambda s: s >= 0, "seconds >= 0")
+    else:
+        f.num("intervals", lambda n: n >= 1 and n == int(n), "a whole number >= 1")
+        f.num("settle", lambda s: s >= 0, "seconds >= 0")
+    f.one_of("counter", COUNTERS)
+    f.one_of("pick", PICKS)
+    if f.block.get("set") is not None:
+        f.num("set")
+    f.take("set")
+
+
+def _moves(f):
+    pairs = f.need("moves")
+    if not isinstance(pairs, list) or not pairs:
+        raise f.err("moves must be [motor, position] pairs, got {!r}".format(pairs))
+    seen = set()
+    for p in pairs:
+        m, x = p if isinstance(p, (list, tuple)) and len(p) == 2 else (None, None)
+        if not isinstance(m, str) or isinstance(x, bool) or not isinstance(x, (int, float)) \
+                or not math.isfinite(x):
+            raise f.err("moves: [motor, position], got {!r}".format(p))
+        if m not in config.MOTORS:
+            raise f.err("moves: motor must be one of {}, got {!r}".format(", ".join(config.MOTORS), m))
+        if m in seen:
+            raise f.err("moves: {} twice".format(m))
+        seen.add(m)
+
+
+def _when(f):
+    w = f.take("when")
+    if w is None:
+        return
+    if not isinstance(w, dict):
+        raise f.err("when must be {{motor, op, value}}, got {!r}".format(w))
+    g = _Fields(f.at + " when", w)
+    g.one_of("motor", config.MOTORS)
+    g.one_of("op", ("<", ">"))
+    g.num("value")
+    g.done()
+
+
+def block(at, b):
+    """`b` as qs takes a block, or Invalid naming `at` and the field."""
+    if not isinstance(b, dict):
+        raise Invalid("{}: must be an object, got {!r}".format(at, b))
+    f = _Fields(at, b)
+    kind = f.one_of("kind", KINDS)
+    f.at = "{} ({})".format(at, kind)
+    note = f.take("note")
+    if note is not None and not isinstance(note, str):
+        raise f.err("note must be a string, got {!r}".format(note))
+    _when(f)
+    if kind == "scan":
+        _scan(f)
+    elif kind == "move":
+        _moves(f)
+    elif kind == "spec":
+        line = f.text("command").strip()
+        if not line or "\n" in line or "\r" in line:
+            raise f.err("command must be one line, got {!r}".format(line))
+    elif kind == "wait":
+        f.num("seconds", lambda s: s > 0, "seconds > 0")
+    elif kind == "loop":
+        f.num("times", lambda n: n >= 1 and n == int(n), "a whole number >= 1")
+        inner = f.need("blocks")
+        if not isinstance(inner, list) or not inner:
+            raise f.err("blocks must be a list of blocks, got {!r}".format(inner))
+        for k, x in enumerate(inner, 1):
+            block("{} block {}".format(f.at, k), x)
+    f.done()
+    return b
+
+
+def sequence_blocks(value):
+    """An alignment sequence's blocks: a non-empty list each qs takes."""
+    if not isinstance(value, list):
+        raise Invalid("blocks must be a list, got {!r}".format(value))
+    if not value:
+        raise Invalid("the sequence has no blocks")
+    return [block("block {}".format(k), b) for k, b in enumerate(value, 1)]
+
+
+def alignment(value, sequence=None):
+    """The kwargs an alignment sequence goes to qs as: its blocks, and its
+    name to record."""
+    kwargs = {"blocks": sequence_blocks(value)}
+    if sequence:
+        kwargs["sequence"] = str(sequence)
+    return kwargs
+
+
+def align(value, sequence=None, series=None):
+    """An `align` item: the sequence `value` (its blocks) named `sequence`."""
+    kwargs = alignment(value, sequence)
     md = series_md(series)
-    return plan_item(plan, md=md) if md else plan_item(plan)
+    if md:
+        kwargs["md"] = md
+    return plan_item("align", **kwargs)
 
 
 def describe(item):
@@ -275,10 +439,14 @@ def describe(item):
     md = kw.get("md") if isinstance(kw.get("md"), dict) else {}
     plan = str(item.get("name") or "")
     shown = []
-    for k in ("T", "ramp", "wait", "tolerance", "soak", "align", "n", "ti", "texpo", "geometry", "th_list"):
+    if "blocks" in kw and "sequence" not in kw:
+        shown.append("blocks={}".format(len(kw["blocks"]) if isinstance(kw["blocks"], list) else "?"))
+    for k in ("sequence", "T", "ramp", "wait", "tolerance", "soak", "n", "ti", "texpo", "geometry", "th_list"):
         if k in kw:
             v = kw[k]
-            if isinstance(v, list):
+            if k == "sequence":
+                v = repr(v) if " " in str(v) else v
+            elif isinstance(v, list):
                 v = "/".join("{:g}".format(x) for x in v) if all(isinstance(x, (int, float)) for x in v) else v
             elif isinstance(v, float):
                 v = "{:g}".format(v)

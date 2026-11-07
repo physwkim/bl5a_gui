@@ -4,6 +4,7 @@ emits them; nothing reaches the queue that `items` refused."""
 from silx.gui import qt
 
 from . import items
+from .editor import SequenceCombo, resolve
 from .items import Invalid
 
 
@@ -99,7 +100,7 @@ COLUMNS = (
     ("soak_n", "soak n", "loopscan points while soaking"),
     ("soak_t", "soak t", "seconds per soak point"),
     ("tolerance", "tol", "with wait: how close to T counts as reached, °C (changec's DELTA_K)"),
-    ("align", "align", "align_in.mac before the frames"),
+    ("align", "align", "run the Alignment sequence before the frames"),
     ("th_list", "th list", "mymar_in's th values, comma separated"),
     ("texpo", "texpo", "seconds (> 0) or monitor counts (< 0)"),
     ("name", "name", "mar345 file name"),
@@ -119,7 +120,7 @@ def _cell_text(v):
 
 class InsituForm(qt.QWidget):
     """myinsitu as a table: each row is one insitu_step (settemp →
-    align_in.mac → mymar_in), all in one series."""
+    the alignment sequence → mymar_in), all in one series."""
 
     queueRequested = qt.Signal(object)
 
@@ -130,6 +131,10 @@ class InsituForm(qt.QWidget):
         self.series = _line(tip="The data folder and stack every row's frames go to (no spaces);"
                                 " empty: the first row's name")
         top.addRow("Series", self.series)
+        self.sequence = SequenceCombo()
+        self.sequence.setToolTip("The sequence each row with align runs: Thin film is align_in.mac's;\n"
+                                 "the user's own are the Alignment panel's user's")
+        top.addRow("Alignment", self.sequence)
         layout.addLayout(top)
         self.table = qt.QTableWidget(0, len(COLUMNS))
         self.table.setHorizontalHeaderLabels([c[1] for c in COLUMNS])
@@ -187,7 +192,9 @@ class InsituForm(qt.QWidget):
 
     def queue_items(self):
         """Every row's item, or Invalid naming the first bad row."""
-        return items.insitu_items(self.rows(), self.series.text())
+        rows = self.rows()
+        sequence = resolve(self.sequence.currentText()) if any(r["align"] for r in rows) else None
+        return items.insitu_items(rows, self.series.text(), sequence)
 
     def _queue(self):
         try:

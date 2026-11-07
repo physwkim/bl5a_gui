@@ -357,6 +357,9 @@ class MainWindow(qt.QMainWindow):
                 self.status.set(key, "—")
 
     def closeEvent(self, event):
+        if not self.align.editor.discard_ok():
+            event.ignore()
+            return
         self.poller.stop()
         self.commands.stop()
         self.documents.stop()

@@ -1,13 +1,14 @@
-//! The four queue items, one per macro of the two flows: `align_coin`
-//! (coin_align), `mar_series` (mymar1, mymar), `align_film`
-//! (align_in.mac) and `insitu_step` (a step of myinsitu, then mymar_in).
-//! Each is one run; its scans are runs of their own ([`crate::scan`]).
-//! Besides the scans a plan records the SPEC commands it sent
-//! ("commands"), each alignment scan's outcome ("stages") and each
-//! frame ("exposures").
+//! The three queue items: `align` (an alignment sequence: coin_align's,
+//! align_in.mac's or a user's), `mar_series` (mymar1, mymar) and
+//! `insitu_step` (a step of myinsitu, then mymar_in). Each is one run;
+//! its scans are runs of their own ([`crate::scan`]). Besides the scans
+//! a plan records the SPEC commands it sent ("commands"), each alignment
+//! scan's outcome ("stages"), where an alignment left the sample
+//! ("final") and each frame ("exposures").
 
 mod align;
 mod args;
+mod blocks;
 mod mar;
 
 use std::collections::HashMap;
@@ -25,7 +26,7 @@ use serde_json::{Value, json};
 use crate::ctx::{Ctx, Step, plan_fn};
 use crate::devices::{CHANNELS, Devices, Holder, Preset, get};
 use crate::place::{DATA_DIR, Place};
-use crate::scan::{Motion, Scan};
+use crate::scan::Scan;
 use crate::screen::{Pick, Screened};
 
 /// What produced the documents.
@@ -157,23 +158,13 @@ pub(crate) struct Ops<'a> {
     dev: &'a Devices,
     /// The item's folder: the frames' and the scans' SPEC file's.
     place: &'a Place,
-    /// SPEC's `DET`, the counter the scans' statistics are of.
-    det: &'static str,
-    /// The step scans' `_sleep`.
-    settle: Duration,
     commands: Arc<Holder>,
     stages: Arc<Holder>,
     exposures: Arc<Holder>,
 }
 
 impl<'a> Ops<'a> {
-    fn new(
-        ctx: &'a Ctx,
-        dev: &'a Devices,
-        place: &'a Place,
-        det: &'static str,
-        settle: Duration,
-    ) -> Self {
+    fn new(ctx: &'a Ctx, dev: &'a Devices, place: &'a Place) -> Self {
         use Dtype::{Integer, Number, String};
         let stats = [
             "before", "target", "after", "set", "cen", "com", "xmax", "fwhm", "ymax",
@@ -194,8 +185,6 @@ impl<'a> Ops<'a> {
             ctx,
             dev,
             place,
-            det,
-            settle,
             commands: Holder::new("commands", &[("cmd", String), ("reply", String)]),
             stages: Holder::new("stages", &stages),
             exposures: Holder::new("exposures", &exposures),
@@ -254,39 +243,6 @@ impl<'a> Ops<'a> {
     async fn erase(&self) -> Step {
         let cam = self.dev.cam.clone();
         self.ctx.call(async move { cam.erase().await }).await
-    }
-
-    fn scan(
-        &self,
-        m: &str,
-        start: f64,
-        finish: f64,
-        relative: bool,
-        ctime: f64,
-        motion: Motion,
-    ) -> Scan {
-        Scan {
-            axis: self.dev.axis(m),
-            start,
-            finish,
-            relative,
-            ctime,
-            motion,
-            det: self.det,
-            spec_file: self.place.spec.clone(),
-        }
-    }
-
-    /// `ascan m s f n t` (`lup` when `relative`).
-    fn step(&self, m: &str, s: f64, f: f64, intervals: usize, t: f64, relative: bool) -> Scan {
-        let settle = self.settle;
-        self.scan(m, s, f, relative, t, Motion::Step { intervals, settle })
-    }
-
-    /// `cscan m s f t st` (`clup` when `relative`).
-    fn fly(&self, m: &str, s: f64, f: f64, t: f64, st: f64, relative: bool) -> Scan {
-        let sleep = Duration::from_secs_f64(st);
-        self.scan(m, s, f, relative, t, Motion::Fly { sleep })
     }
 
     /// One alignment scan, then `umv m <pick>` and, given `set`, `set m

@@ -155,6 +155,11 @@ impl<'a> Args<'a> {
             .ok_or_else(|| format!("{}: {name} must be a string, got {v}", self.plan))
     }
 
+    /// A required value, as given.
+    pub fn value(&self, name: &str) -> Result<Value, String> {
+        self.required(name).cloned()
+    }
+
     /// A required list of numbers.
     pub fn f64_list(&self, name: &str) -> Result<Vec<f64>, String> {
         let v = self.required(name)?;

@@ -4,7 +4,9 @@ import html
 
 from silx.gui import qt
 
-from . import config, items
+from . import config, items, sequences
+from .editor import SequenceEditor, UserCombo, resolve, source
+from .items import Invalid
 
 DASH = "—"
 
@@ -167,31 +169,87 @@ class MotorsPanel(qt.QGroupBox):
 
 
 class AlignBox(qt.QGroupBox):
-    """The two alignment plans; each button queues one in the series."""
+    """The alignment sequence being used: load a template or one the user
+    saved, edit its blocks in their own window, save it as the user's,
+    queue it in the series."""
 
     queueRequested = qt.Signal(object)
 
     def __init__(self, parent=None):
         super().__init__("Alignment", parent)
         layout = qt.QGridLayout(self)
+        self.coin = qt.QPushButton("Coin cell")
+        self.coin.setToolTip("Load coin_align's sequence")
+        self.film = qt.QPushButton("Thin film")
+        self.film.setToolTip("Load align_in.mac's sequence")
+        self.load = qt.QPushButton("Load…")
+        self.load.setToolTip("Load one of the user's saved sequences")
+        self.load.setMenu(qt.QMenu(self.load))
+        self.load.menu().aboutToShow.connect(self._savedMenu)
+        loads = qt.QHBoxLayout()
+        for b in (self.coin, self.film, self.load):
+            loads.addWidget(b)
+        self.user = UserCombo()
+        self.user.setToolTip("Whose sequences: kept in <data folder>/alignments/<user>")
+        self.editor = SequenceEditor(self)
+        self.shown = qt.QLabel()
+        self.edit = qt.QPushButton("Blocks…")
+        self.edit.setToolTip("The loaded sequence's blocks, in a window of their own")
         self.series = qt.QLineEdit()
         self.series.setToolTip("The history groups alignments by this, and it names the data folder (no spaces);\n"
                                "empty: each run on its own, in a folder named after the plan")
-        self.coin = qt.QPushButton("Coin cell")
-        self.coin.setToolTip("align_coin: coin_align's scans")
-        self.film = qt.QPushButton("Thin film")
-        self.film.setToolTip("align_film: align_in.mac's scans")
-        layout.addWidget(qt.QLabel("Series"), 0, 0)
-        layout.addWidget(self.series, 0, 1, 1, 2)
-        layout.addWidget(self.coin, 1, 1)
-        layout.addWidget(self.film, 1, 2)
-        self.coin.clicked.connect(lambda: self._queue("align_coin"))
-        self.film.clicked.connect(lambda: self._queue("align_film"))
+        self.queue = qt.QPushButton("Queue")
+        self.queue.setToolTip("Queue the blocks shown, as they are")
+        layout.addLayout(loads, 0, 0, 1, 3)
+        layout.addWidget(qt.QLabel("User"), 1, 0)
+        layout.addWidget(self.user, 1, 1, 1, 2)
+        layout.addWidget(self.shown, 2, 0, 1, 2)
+        layout.addWidget(self.edit, 2, 2)
+        layout.addWidget(qt.QLabel("Series"), 3, 0)
+        layout.addWidget(self.series, 3, 1)
+        layout.addWidget(self.queue, 3, 2)
+        layout.setColumnStretch(1, 1)
+        self.user.editTextChanged.connect(self._user)
+        self.coin.clicked.connect(lambda: self._load("Coin cell"))
+        self.film.clicked.connect(lambda: self._load("Thin film"))
+        self.edit.clicked.connect(self.editor.open)
+        self.editor.changed.connect(self._shown)
+        self.queue.clicked.connect(self._queue)
+        self.editor.load(*resolve(sequences.DEFAULT))
 
-    def _queue(self, plan):
+    def _user(self, text):
+        _settings().setValue("align_user", text.strip())
+
+    def _savedMenu(self):
+        menu = self.load.menu()
+        menu.clear()
+        root, user = source()
+        names = sequences.saved(root, user)
+        for name in names:
+            # "&&": a lone "&" in an action's text marks a shortcut key.
+            menu.addAction(name.replace("&", "&&"), lambda name=name: self._load(name))
+        if not names:
+            menu.addAction("No sequences saved by {!r}".format(user) if user and root
+                           else "Set the Data folder and a User first").setEnabled(False)
+
+    def _load(self, name):
         try:
-            item = items.align(plan, self.series.text().strip() or None)
-        except items.Invalid as e:
+            _, blocks = resolve(name)
+        except Invalid as e:
+            qt.QMessageBox.warning(self, "Alignment", str(e))
+            return
+        if self.editor.load(name, blocks):
+            self.editor.open()
+
+    def _shown(self):
+        e = self.editor
+        self.shown.setText("<b>{}</b>{}, {} blocks".format(html.escape(e.name), " *" if e.dirty else "",
+                                                          len(e.blocks)))
+
+    def _queue(self):
+        try:
+            item = items.align(self.editor.blocks, self.editor.label(), self.series.text().strip() or None)
+        except Invalid as e:
             qt.QMessageBox.warning(self, "Alignment", str(e))
             return
         self.queueRequested.emit(item)

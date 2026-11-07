@@ -317,30 +317,47 @@ FullFileName_RBV), 온도(`BL5A:TC:*`), suspender용 링
   시각이 아니라 bl5a-qs에 도착한 시각이다), 나머지 키 이름순, 검출기 마지막이다. 라벨은
   니모닉이고 `#O`·`#P`·`#G`·`#Q`는 없다(문서에 모터 표와 기하가 없다).
 
-큐 아이템은 매크로 하나에 plan 하나, 넷뿐이다. 스캔과 노출은 그 안의
-조각이고 따로 큐에 넣지 않는다.
+큐 아이템은 plan 셋뿐이다. 스캔과 노출은 그 안의 조각이고 따로 큐에 넣지
+않는다.
 
 | plan | 대응 매크로 |
 | --- | --- |
-| `align_coin()` | coin_align |
+| `align(blocks, sequence)` | coin_align, align_in.mac(정렬 순서로) |
 | `mar_series(name, ti, texpo, n, geometry)` | mymar1(n=1), mymar |
-| `align_film()` | align_in.mac |
-| `insitu_step(T, ramp, wait, soak, align, th_list, texpo, name)` | myinsitu의 온도 한 칸 + mymar_in |
+| `insitu_step(T, ramp, wait, soak, blocks, sequence, th_list, texpo, name)` | myinsitu의 온도 한 칸 + mymar_in |
+
+정렬은 블록 목록(`qs/src/plans/blocks.rs`)이다. 블록은 scan(type
+ascan·lup·cscan·clup, motor, start, finish, time, 스텝이면 intervals·settle,
+fly면 sleep, counter, pick CEN·COM·xMAX·EDGE, set), move(`umv`할 [motor,
+pos] 쌍), spec(명령 한 줄), wait(초), erase(mar345 판 지우기), loop(제
+`blocks`를 순서대로 `times`번; loop 안에 loop도 된다) 여섯 가지이고,
+어느 블록이든 `when`({motor, op `<`·`>`, value}: 그 조건일 때만 실행; loop는
+시작 전에 한 번)과 `note`를 가질 수 있다. 오류는 블록을 자리로 부른다
+("block 4 (loop) block 2 (scan): …"). 모르는 필드, 범위 밖 값은 GUI가
+큐에 넣기 전에 거절하고, bl5a-qs도 plan을 만들 때 거절한다.
+블록을 다 돌면 끝 위치(sx, sy, shold, th, phi)를 "final" 이벤트로 남긴다.
+GUI가 블록을 아이템에 그대로 실어 보내므로 큐에 넣은 뒤 순서를 고쳐도 그
+아이템은 바뀌지 않는다. `sequence`는 기록용 이름이다.
+
+정렬 순서는 GUI의 `gui/bl5a_gui/templates/`에 매크로 둘(Coin cell =
+coin_align, Thin film = align_in.mac)이 읽기 전용으로 있고, 이용자 것은
+`<데이터 폴더>/alignments/<이용자>/<이름>.json`(`{"blocks": [...]}`)에
+저장한다. GUI는 저장·읽기 때 bl5a-qs와 같은 규칙으로 검사한다
+(`items.block`); bl5a-qs 테스트가 두 템플릿을 그대로 읽어 본다.
 
 아래에서 fly의 괄호는 (이동 시간, 샘플 간격), 스텝의 괄호는 (구간 수, 점당
 시간)이다.
-- `align_coin`: marshut 0 → `mon1_setup 1050 100 300 3.0 1.0` → `setkappa 50`
+- Coin cell: marshut 0 → `mon1_setup 1050 100 300 3.0 1.0` → `setkappa 50`
   → `counters 2 5`, `fi 1 0 0 0`, `fil 0 0 0 0` → 상대 fly sy −2.5…2.5
   (12.5 s, 0.1 s) → COM, 상대 fly shold −2.0…2.0(10.5 s, 0.1 s) → COM →
-  `mar345closeshutter` → erase → marshut 340. 검출기는 ic1이다. 끝 위치(sx,
-  sy, shold, th, phi)를 stop 문서에 남긴다.
+  `mar345closeshutter` → erase → marshut 340. 검출기는 ic1이다.
 - `mar_series`: `mar345closeshutter`, scell 0, `counters 2 3`, `fi 0 1 0 0`,
   `ic_range 4`, `mar_ip7 <geometry>`, scell 0 뒤 n 프레임. geometry는 mymar의
   세 벌이다: Standard `-85 435 100 330 50 1.2 -6.8`(매크로 기본), High Q Asymm
   `-85 435 110 330 80 1.2 -6.8`, Low Q Symmetric `160 435 36 345 54 1.2 -6.8`.
   i번째 프레임은 t0 + i·Ti에 시작한다(매크로와 같이 밀리지 않고, 넘치면 다음
   경계로). 정지 요청은 프레임 사이에서 먹는다.
-- `align_film`: align_in.mac 순서 그대로다. 준비는 `ds_wid 0.5 1.0`,
+- Thin film: align_in.mac 순서 그대로다. 준비는 `ds_wid 0.5 1.0`,
   `ss_wid 1.0 6.0`, `LF nu`, `autofil 0`, martran < 1200이면
   `mar_ip_mode off`, tth 1·th 0, `atte 0`, `marstart2`, `atte 11`,
   `counters 2 3`, scell 5, `ic_range 4`, `ic_offset 1`,
@@ -360,7 +377,7 @@ FullFileName_RBV), 온도(`BL5A:TC:*`), suspender용 링
   T}`로 |T − 읽음| ≤ 허용오차(기본 0.3 °C, sixc `DELTA_K`)까지 대기(kappa에
   `DELTA_K`가 없어 local로 준다), 아니면 myinsitu 첫 칸처럼 `settemp T` →
   soak = (n, t)이면 `loopscan n t`(온도는 SPEC이 att 카운터와 데이터 파일에
-  남긴다; `plotselect`는 보내지 않는다) → align이면 `align_film` → 측정(mymar_in):
+  남긴다; `plotselect`는 보내지 않는다) → blocks가 있으면 그 정렬 → 측정(mymar_in):
   - tth < 40이면 셔터를 닫고 tth 45·th 0 뒤 tth 81, th 0, scell 0, martran 25,
     marsdd 440, marshut 340을 한 번에.
   - tth 81·th 0, `counters 2 3`, `fi 1 0 0 0`, `ic_range 5`, `ic_offset 0`,
@@ -476,8 +493,12 @@ Python Qt(silx.gui.qt + pyepics). bl7c `pal_tools`의 `bsrs_client.py`,
 └───────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-- **정렬**: 버튼 둘 — Coin cell(`align_coin`), Thin film(`align_film`). 단계마다
-  이전→이후 위치, CEN/FWHM을 표시하고 시리즈별 이력(T에 따른 shold·th0)을 남긴다.
+- **정렬**: Coin cell·Thin film 버튼이나 Load…(이용자 것)로 순서를 불러오면
+  별도의 Blocks 창이 열린다. 거기서 블록을 더하고·고치고·옮기고·지우고,
+  이웃한 블록을 loop로 묶어(N회 반복) 이용자 것으로 저장한다. Queue는
+  패널에서 한다.
+  단계마다 이전→이후 위치, CEN/FWHM을 표시하고 시리즈별 이력(T에 따른
+  shold·th0)을 남긴다.
 - **전지**: filename(공백 없음, 28자 미만 — 매크로 주석), Ti(분, > 2.5),
   Texpo(초 1–20 또는 음수 모니터), N, geometry 세 벌. 1회(mymar1)/반복(mymar),
   "이번 프레임 후 정지". 시작 전에 빔스톱 확인을 받는다(매크로의

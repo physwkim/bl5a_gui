@@ -25,7 +25,7 @@ pub const SCAN_RUN: &str = "scan";
 /// An interrupted scan's motor, to DMOV.
 const SETTLE: Duration = Duration::from_secs(30);
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Motion {
     /// `intervals` steps; `settle` is the macros' `_sleep` before each
     /// count.

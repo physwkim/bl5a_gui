@@ -1,4 +1,4 @@
-# The BL5A queue server: the four macro plans on bsrs, over Channel Access
+# The BL5A queue server: the three plans on bsrs, over Channel Access
 # to spec-ioc, mar345-ioc and the temperature IOC.
 
 [package]

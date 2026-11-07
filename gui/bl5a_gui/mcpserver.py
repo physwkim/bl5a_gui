@@ -28,7 +28,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 from mcp_types import ToolAnnotations
 from pydantic import BaseModel, ConfigDict, Field
 
-from . import config, docs, gate, items, mar, peak
+from . import config, docs, gate, items, mar, peak, sequences
 from .speclog import LogLines
 from .vendor.bsrs_client import DocumentRelay, QsClient, QsError, RunEngineProxy
 
@@ -40,6 +40,10 @@ bl5a-integrator integrates each frame into its series' stack.
 - Start with `status`: what runs, and `allowed`, the actions open now.
 - Plans run only from the queue: queue_alignment, queue_mar_series or
   queue_insitu, then queue_start.
+- An alignment is a sequence of blocks (scans, moves, SPEC commands):
+  the templates "Coin cell" and "Thin film" or one a user saved.
+  alignment_sequences lists them, alignment_sequence shows one, and
+  save_alignment_sequence keeps an edited copy as the user's.
 - tweak and spec_command need SPEC free (status.allowed.spec): qs idle with
   nothing running, SPEC connected and idle.
 - messages, spec_log and commands are logs: pass `since` = the `last` the
@@ -153,13 +157,25 @@ class Command:
     result: dict = None
 
 
-def gui_data_folder():
-    """The GUI's Data folder setting, as last saved; "" when unset."""
+def gui_setting(key):
+    """A GUI setting, as last saved; "" when unset."""
     from silx.gui import qt  # only here: Qt is not needed otherwise
 
     s = qt.QSettings(*config.SETTINGS)
     s.sync()
-    return str(s.value("data_root", "") or "")
+    return str(s.value(key, "") or "")
+
+
+def gui_data_folder():
+    """The GUI's Data folder setting."""
+    return gui_setting("data_root")
+
+
+def sequence_place(user, data_folder):
+    """(data folder, user) a sequence is kept under: the arguments, or the
+    GUI's Data folder and Alignment user when None."""
+    return (gui_data_folder() if data_folder is None else data_folder,
+            gui_setting("align_user") if user is None else user)
 
 
 def _item(item):
@@ -393,7 +409,8 @@ class Beamline:
     def _run_start(self, run):
         self.messages.add("{} started ({})".format(run.plan, run.series))
         if run.plan in docs.ALIGNING:
-            self.stages = {"caption": "Stages — {} ({})".format(run.plan, run.series), "rows": []}
+            self.stages = {"caption": "Stages — {} ({})".format(docs.what(run.plan, run.start.get("sequence")),
+                                                                run.series), "rows": []}
 
     def _run_stop(self, run, row):
         if row is not None:
@@ -599,7 +616,8 @@ class InsituRow(BaseModel):
     soak_t: float | None = Field(items.NEW_ROW["soak_t"], description="seconds per soak point (with soak_n)")
     tolerance: float | None = Field(items.NEW_ROW["tolerance"],
                                     description="with wait: how close to T counts as reached, °C")
-    align: bool = Field(items.NEW_ROW["align"], description="align_in.mac before the frames")
+    align: bool = Field(items.NEW_ROW["align"], description="run queue_insitu's alignment sequence before the "
+                                                            "frames")
     th_list: list[float] = Field(list(items.NEW_ROW["th_list"]),
                                  description="mymar_in's th values, one frame each; [] for no frames")
     texpo: float = Field(items.NEW_ROW["texpo"], description="seconds (> 0) or monitor counts (< 0)")
@@ -609,6 +627,17 @@ class InsituRow(BaseModel):
 DATA_FOLDER = Field(description="Where the item's data goes, as <folder>/<series>: an absolute path without "
                                 "spaces; \"\" for bl5a-qs's --data-root; null for the GUI's Data folder setting")
 SERIES = Field(description="The series: names the data folder and stack (no spaces or '/')")
+SEQUENCE = Field(description="An alignment sequence: \"Coin cell\" (coin_align's), \"Thin film\" "
+                             "(align_in.mac's) or one the user saved")
+USER = Field(description="Whose saved sequences, kept in <data folder>/alignments/<user>; null: the GUI's "
+                         "Alignment user")
+BLOCKS = """Each block is an object with "kind": "scan" {type: ascan|lup|cscan|clup, motor, start, finish,
+time (s per point for ascan/lup, of the whole move for cscan/clup), intervals and settle (s) for ascan/lup,
+sleep (s) for cscan/clup, counter: det|ic1|icxrd, pick: CEN|COM|xMAX|EDGE (where the motor goes), set
+(optional: set the motor to this there)}; "move" {moves: [[motor, position], ...], moved together};
+"spec" {command: one SPEC line}; "wait" {seconds}; "erase" {} (the mar345 plate); "loop" {times, blocks:
+[...]} (its blocks in order, times over; they may be loops too). Any block may carry "when" {motor, op:
+"<"|">", value} (run only then; a loop's, once before it starts) and "note". Motors: """ + ", ".join(config.MOTORS) + "."
 
 
 def build(bl):
@@ -841,14 +870,50 @@ def build(bl):
         return out(bl.command_result())
 
     # -- queueing --------------------------------------------------------
+    @tool(read_only=True)
+    def alignment_sequences(user: Annotated[str | None, USER] = None,
+                            data_folder: Annotated[str | None, DATA_FOLDER] = None):
+        """The alignment sequences queue_alignment and queue_insitu take:
+        the templates, the user's saved ones, and the users who saved
+        any."""
+        root, user = sequence_place(user, data_folder)
+        return out({"user": user, "data_folder": root, "templates": list(sequences.TEMPLATES),
+                    "saved": sequences.saved(root, user), "users": sequences.users(root)})
+
+    @tool(read_only=True)
+    def alignment_sequence(name: Annotated[str, SEQUENCE],
+                           user: Annotated[str | None, USER] = None,
+                           data_folder: Annotated[str | None, DATA_FOLDER] = None):
+        """One alignment sequence: its blocks in order, as
+        save_alignment_sequence takes them, and each as a line numbered
+        as errors name it ("3.2": block 2 of the loop block 3)."""
+        root, user = sequence_place(user, data_folder)
+        blocks = sequences.get(name, root, user)
+        return out({"name": name, "blocks": blocks, "lines": sequences.lines(blocks)})
+
     @tool()
-    def queue_alignment(kind: Literal["coin", "film"],
+    def save_alignment_sequence(name: Annotated[str, Field(description="The name to keep it under; not a "
+                                                                       "template's")],
+                                blocks: Annotated[list[dict], Field(min_length=1, description=BLOCKS)],
+                                user: Annotated[str | None, USER] = None,
+                                data_folder: Annotated[str | None, DATA_FOLDER] = None):
+        """Keep `blocks` as the user's sequence `name`, replacing one saved
+        so. The GUI's sequence editor: start from alignment_sequence's
+        blocks, change the order or the parameters, save."""
+        root, user = sequence_place(user, data_folder)
+        path = sequences.save(name, blocks, root, user)
+        return out({"saved": str(path), "lines": sequences.lines(blocks)})
+
+    @tool()
+    def queue_alignment(sequence: Annotated[str, SEQUENCE],
+                        user: Annotated[str | None, USER] = None,
                         series: Annotated[str | None, SERIES] = None,
                         data_folder: Annotated[str | None, DATA_FOLDER] = None):
-        """Queue an alignment: align_coin (coin cell: coin_align's scans) or
-        align_film (thin film: align_in.mac's scans). The GUI's Alignment
-        buttons."""
-        return out(bl.add([items.align("align_" + kind, series)], data_folder))
+        """Queue an alignment sequence, the blocks it has now. The GUI's
+        Alignment panel."""
+        root, user = sequence_place(user, data_folder)
+        blocks = sequences.get(sequence, root, user)
+        return out(bl.add([items.align(blocks, sequence, series)], data_folder))
 
     @tool()
     def queue_mar_series(name: Annotated[str, Field(description="mar345 file name: 1-27 characters, no spaces "
@@ -878,14 +943,21 @@ def build(bl):
                      append_cooling_row: Annotated[bool, Field(description="end with myinsitu's last row: ramp "
                                                                            "25 °C/min to 25 °C, soak 3600 "
                                                                            "points of 1 s")] = False,
+                     sequence: Annotated[str, SEQUENCE] = sequences.DEFAULT,
+                     user: Annotated[str | None, USER] = None,
                      data_folder: Annotated[str | None, DATA_FOLDER] = None):
         """Queue the in-situ table, one insitu_step per row, in order and in
-        one series: set_ramp → settemp (wait) → soak loopscan → align_in.mac
-        → mymar_in at each th. The GUI's In-situ form."""
+        one series: set_ramp → settemp (wait) → soak loopscan → the
+        alignment sequence (rows with align) → mymar_in at each th. The
+        GUI's In-situ form."""
         table = [r.model_dump(exclude_unset=True) for r in rows]
         if append_cooling_row:
             table.append(items.cooling_row())
-        return out(bl.add(items.insitu_items(table, series), data_folder))
+        aligned = None
+        if any(dict(items.NEW_ROW, **r)["align"] for r in table):
+            root, user = sequence_place(user, data_folder)
+            aligned = (sequence, sequences.get(sequence, root, user))
+        return out(bl.add(items.insitu_items(table, series, aligned), data_folder))
 
     # -- the queue ---------------------------------------------------------
     @tool(destructive=True)
