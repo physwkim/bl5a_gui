@@ -5,6 +5,8 @@ After=bl5a-sim.service
 
 [Service]
 EnvironmentFile=%h/.config/bl5a/bl5a.env
+# Its database folders, copied by deploy/install.sh.
+EnvironmentFile=@BL5A@/target/ioc-share/spec-ioc.env
 EnvironmentFile=-%h/.config/bl5a/spec-ioc.env
 WorkingDirectory=@BL5A@/ioc/spec
 RuntimeDirectory=bl5a-spec-ioc

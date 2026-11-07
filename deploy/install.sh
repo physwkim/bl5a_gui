@@ -49,6 +49,32 @@ echo "== Building mar345-ioc (epics-rs-iocs $rev)"
 (cd "$BL5A" && cargo install --locked --git https://github.com/epics-rs/epics-rs-iocs \
     --rev "$rev" --root target/mar345-ioc --target-dir target/mar345-ioc/build mar345-ioc)
 
+# An IOC reads its databases from the crate folders it was built from,
+# which cargo's cache cleaning deletes after a month unused: copy each
+# folder under cargo's home that it names to target/ioc-share, and
+# target/ioc-share/<ioc>.env points the service there.
+echo "== Copying the IOCs' database folders to target/ioc-share"
+share=$BL5A/target/ioc-share
+cargo_home=${CARGO_HOME:-$HOME/.cargo}
+probe=$(mktemp)
+echo epicsEnvShow >"$probe"
+for ioc in spec-ioc:target/release/spec-ioc mar345-ioc:target/mar345-ioc/bin/mar345-ioc; do
+    name=${ioc%%:*}
+    rm -rf "${share:?}/$name" "$share/$name.env"
+    mkdir -p "$share/$name"
+    env -i NO_COLOR=1 "$BL5A/${ioc#*:}" "$probe" </dev/null |
+        while IFS='=' read -r var dir; do
+            case $dir in
+            "$cargo_home"/*)
+                cp -R "$dir" "$share/$name/$var"
+                echo "$var=$share/$name/$var" >>"$share/$name.env"
+                ;;
+            esac
+        done
+    [ -s "$share/$name.env" ] || die "$name names no folder under $cargo_home"
+done
+rm -f "$probe"
+
 if ! "$python" -I -c 'import silx, PySide6, epics, zmq, msgpack, numpy, fabio' 2>/dev/null; then
     echo "WARNING: $python lacks the GUI's packages (doc/install.md, section 3)" >&2
 fi

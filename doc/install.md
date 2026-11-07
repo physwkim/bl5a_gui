@@ -78,6 +78,8 @@ deploy/install.sh --python /path/to/python
 - builds this directory's programs, `spec-ioc` among them, in release
   mode in `target/release/`, and `mar345-ioc` from epics-rs-iocs in
   `target/mar345-ioc/bin/`;
+- copies the IOCs' database folders out of `~/.cargo` to
+  `target/ioc-share/` (below);
 - writes `~/.config/bl5a/bl5a.env` from `deploy/env/beamline/bl5a.env`
   (section 4);
 - installs the user services `bl5a-spec-ioc`, `bl5a-mar345-ioc`,
@@ -91,13 +93,13 @@ shortcut, and keeps the settings files that exist. Then
 `systemctl --user restart bl5a.target`.
 
 The IOC binaries find their database files through paths fixed at build
-time: `$(SPEC_IOC)` (spec-ioc's crate), `$(SCALER)` and `$(MOTOR)` (the
-scaler and motor crates in `~/.cargo/registry`), and for mar345-ioc
-`$(ADCORE)` (in `~/.cargo/registry`) and `$(ADMAR345)` (in
-`~/.cargo/git/checkouts`). Either build on the host that runs them and
-keep the source tree and `~/.cargo` in place, or set those environment
-variables to copies of the directories; a variable that is set wins over
-the built-in path.
+time: `$(SPEC_IOC)` in this tree, and the crate folders under `~/.cargo`
+the rest name (`$(MOTOR)`, `$(SCALER)` and `$(ASYN)` for spec-ioc;
+`$(ADCORE)`, `$(ADMAR345)`, `$(ASYN)`, `$(CALC)` and `$(AUTOSAVE)` for
+mar345-ioc), which cargo deletes after a month unused. `install.sh` copies
+each of those folders to `target/ioc-share/<ioc>/` and lists them in
+`target/ioc-share/<ioc>.env`, which that IOC's service reads; a variable
+set in `spec-ioc.env` or `mar345-ioc.env` wins over it.
 
 ### The GUI's Python
 
