@@ -438,6 +438,10 @@ ends the plan, which fails with the reason Messages shows, when
   10% of its largest bin, or by less than 5 times the noise of a bin;
 - a peak's maximum is the scan's first or last point, or both of its
   neighbours are at or below half of it (a peak one point wide);
+- the bins on either side of a peak's largest bin do not fall below it
+  by more than 3 times the noise of a difference of two bins: the peak
+  may lie past the end, with the end point's noise putting it below the
+  one before;
 - an edge never falls to half its maximum, or falls to half on both
   sides.
 

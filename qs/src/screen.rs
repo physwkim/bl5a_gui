@@ -49,15 +49,18 @@ pub struct Screened {
 const HALF_WINDOW: usize = 2;
 /// A point this many σ from its window's median is an outlier.
 const OUTLIER: f64 = 3.0;
-/// The visibility test averages a scan down to this many bins, so a
-/// 2000-sample fly scan is judged on means of 80 samples, not on its
-/// noisiest sample.
+/// The visibility and peak tests average a scan down to this many bins,
+/// so a 2000-sample fly scan is judged on means of 80 samples, not on
+/// its noisiest sample.
 const BINS: usize = 25;
 /// A scan whose bins change by less than this fraction of their
 /// maximum, or by less than `MIN_SNR` times a bin's noise, shows
 /// nothing.
 const MIN_CONTRAST: f64 = 0.10;
 const MIN_SNR: f64 = 5.0;
+/// A peak's bins fall below its largest, on each side, by more than
+/// this many σ of a difference of two bins.
+const MIN_FALL: f64 = 3.0;
 /// σ per median absolute deviation, for normal noise.
 const MAD_SIGMA: f64 = 1.4826;
 
@@ -121,17 +124,49 @@ fn hampel(y: &[f64]) -> (Vec<f64>, usize) {
     (out, replaced)
 }
 
-/// How much the scan changes: the range of its bin means as a fraction
-/// of the largest, and in the noise of a mean.
-fn contrast(y: &[f64]) -> (f64, f64) {
-    let b = (y.len() / BINS).max(1);
-    let means: Vec<f64> = y
-        .chunks_exact(b)
-        .map(|c| c.iter().sum::<f64>() / b as f64)
-        .collect();
-    let top = means.iter().copied().fold(f64::NEG_INFINITY, f64::max);
-    let range = top - means.iter().copied().fold(f64::INFINITY, f64::min);
-    (range / top, range / (noise(y) / (b as f64).sqrt()))
+/// The scan averaged into `BINS` bins, and the noise of one bin.
+struct Bins {
+    means: Vec<f64>,
+    sigma: f64,
+}
+
+impl Bins {
+    fn of(y: &[f64]) -> Bins {
+        let b = (y.len() / BINS).max(1);
+        Bins {
+            means: y
+                .chunks_exact(b)
+                .map(|c| c.iter().sum::<f64>() / b as f64)
+                .collect(),
+            sigma: noise(y) / (b as f64).sqrt(),
+        }
+    }
+
+    /// How much the scan changes: the range of the bins as a fraction of
+    /// the largest, and in the noise of a bin.
+    fn contrast(&self) -> (f64, f64) {
+        let top = self.means.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+        let range = top - self.means.iter().copied().fold(f64::INFINITY, f64::min);
+        (range / top, range / self.sigma)
+    }
+
+    /// The bins fall below the first largest on both sides, by more than
+    /// `MIN_FALL` σ of a difference of two bins: a peak past an end, whose
+    /// end point noise put below the one before it, does not.
+    fn falls(&self) -> Result<(), String> {
+        let m = &self.means;
+        let top = (0..m.len()).fold(0, |t, i| if m[i] > m[t] { i } else { t });
+        let least = MIN_FALL * std::f64::consts::SQRT_2 * self.sigma;
+        for (side, part) in [("before", &m[..top]), ("after", &m[top + 1..])] {
+            let low = part.iter().copied().fold(f64::INFINITY, f64::min);
+            if m[top] - low <= least {
+                return Err(format!(
+                    "the scan does not fall {side} its maximum: no peak in the range"
+                ));
+            }
+        }
+        Ok(())
+    }
 }
 
 /// The scan's statistics and `pick`'s target, or why it has none.
@@ -141,7 +176,8 @@ pub fn screen(x: &[f64], y: &[f64], pick: Pick) -> Result<Screened, String> {
         return Err("the scan has a run of points that are not numbers".into());
     }
     let stats = Stats::of(x, &y).ok_or("the scan has no points")?;
-    let (part, snr) = contrast(&y);
+    let bins = Bins::of(&y);
+    let (part, snr) = bins.contrast();
     if !(part >= MIN_CONTRAST && snr >= MIN_SNR) {
         let what = if let Pick::Edge = pick {
             "edge"
@@ -155,6 +191,7 @@ pub fn screen(x: &[f64], y: &[f64], pick: Pick) -> Result<Screened, String> {
     }
     if !matches!(pick, Pick::Edge) {
         inside(&y, stats.ymax)?;
+        bins.falls()?;
     }
     let target = match pick {
         Pick::Cen => stats.cen,
@@ -281,7 +318,7 @@ mod tests {
         // Over 10% from bin to bin, but only by counting noise.
         let x = grid(0.0, 1.0, 401);
         let low = counts(&x, |_| 10.0);
-        let (part, snr) = contrast(&hampel(&low).0);
+        let (part, snr) = Bins::of(&hampel(&low).0).contrast();
         assert!(part >= MIN_CONTRAST && snr < MIN_SNR, "{part} {snr}");
         assert!(fails(&x, &low, Pick::Edge).starts_with("no edge visible"));
     }
@@ -307,6 +344,22 @@ mod tests {
         assert!(fails(&x, &y, Pick::XMax).starts_with("the maximum is the scan's last point"));
         let y: Vec<f64> = y.into_iter().rev().collect();
         assert!(fails(&x, &y, Pick::Com).starts_with("the maximum is the scan's first point"));
+    }
+
+    /// A peak past the last point, whose last point noise put below the
+    /// one before it: the maximum is not an end point, but the scan does
+    /// not fall after it.
+    #[test]
+    fn peak_past_the_end_has_no_target() {
+        let x = grid(0.0, 1.0, 21);
+        let mut y = gauss(&x, 1.05, 0.2, 50.0);
+        y[20] = y[19] - 20.0;
+        assert!(fails(&x, &y, Pick::Cen).starts_with("the scan does not fall after its maximum"));
+        let y: Vec<f64> = y.into_iter().rev().collect();
+        assert!(fails(&x, &y, Pick::Cen).starts_with("the scan does not fall before its maximum"));
+        // A peak inside the range falls on both sides.
+        let y = gauss(&x, 0.85, 0.05, 50.0);
+        assert!(screen(&x, &y, Pick::Cen).is_ok());
     }
 
     #[test]
