@@ -633,8 +633,9 @@ USER = Field(description="Whose saved sequences, kept in <data folder>/alignment
                          "Alignment user")
 BLOCKS = """Each block is an object with "kind": "scan" {type: ascan|lup|cscan|clup, motor, start, finish,
 time (s per point for ascan/lup, of the whole move for cscan/clup), intervals and settle (s) for ascan/lup,
-sleep (s) for cscan/clup, counter: det|ic1|icxrd, pick: CEN|COM|xMAX|EDGE (where the motor goes), set
-(optional: set the motor to this there)}; "move" {moves: [[motor, position], ...], moved together};
+sleep (s) for cscan/clup, counter: det|ic1|icxrd, pick: CEN|COM|xMAX|EDGE (where the motor goes), dip
+(optional, true: CEN/COM/xMAX of a dip, of the scan turned over; not with EDGE), set (optional: set the motor
+to this there)}; "move" {moves: [[motor, position], ...], moved together};
 "spec" {command: one SPEC line}; "wait" {seconds}; "erase" {} (the mar345 plate); "loop" {times, blocks:
 [...]} (its blocks in order, times over; they may be loops too). Any block may carry "when" {motor, op:
 "<"|">", value} (run only then; a loop's, once before it starts) and "note". Motors: """ + ", ".join(config.MOTORS) + "."

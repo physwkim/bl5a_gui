@@ -165,11 +165,16 @@ pub(crate) struct Ops<'a> {
 
 impl<'a> Ops<'a> {
     fn new(ctx: &'a Ctx, dev: &'a Devices, place: &'a Place) -> Self {
-        use Dtype::{Integer, Number, String};
+        use Dtype::{Boolean, Integer, Number, String};
         let stats = [
             "before", "target", "after", "set", "cen", "com", "xmax", "fwhm", "ymax",
         ];
-        let mut stages = vec![("stage", String), ("motor", String), ("pick", String)];
+        let mut stages = vec![
+            ("stage", String),
+            ("motor", String),
+            ("pick", String),
+            ("dip", Boolean),
+        ];
         stages.extend(stats.map(|k| (k, Number)));
         stages.push(("rejected", Integer));
         let mut exposures = vec![
@@ -278,6 +283,8 @@ impl<'a> Ops<'a> {
             ("stage", json!(line)),
             ("motor", json!(m)),
             ("pick", json!(pick.name())),
+            // The statistics then are of the scan turned over.
+            ("dip", json!(matches!(pick, Pick::Dip(_)))),
             ("before", json!(before)),
             ("target", json!(target)),
             ("after", json!(after)),

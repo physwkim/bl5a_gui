@@ -113,16 +113,19 @@ class ScanTab(qt.QWidget):
             self._say("no points" + (" ({})".format(docs.outcome(scan.exit_status, scan.reason))
                                      if scan.exit_status else ""))
             return
+        # A dip's statistics are of the scan turned over: its maximum is
+        # the dip's depth, at the scan's minimum.
+        dip = stage is not None and bool(stage.get("dip"))
         for key, label, color in MARKERS:
             v = getattr(st, key)
+            label = "MIN" if dip and key == "xpk" else label
             if math.isfinite(v):
                 plot.addXMarker(v, legend=label, text=label, color=color)
-        text = "CEN {:.5g}  FWHM {:.4g}  COM {:.5g}  MAX {:.5g} at {:.5g}".format(st.cen, st.fwhm, st.com, st.ymax,
-                                                                                   st.xpk)
+        text = "CEN {:.5g}  FWHM {:.4g}  COM {:.5g}  {} {:.5g} at {:.5g}".format(
+            st.cen, st.fwhm, st.com, "DIP" if dip else "MAX", st.ymax, st.xpk)
         if stage is not None and stage.get("target") is not None:
-            plot.addXMarker(stage["target"], legend="target", text=str(stage.get("pick") or "target"),
-                            color="black")
-            text += "  → {} {:.5g}".format(stage.get("pick"), stage["target"])
+            plot.addXMarker(stage["target"], legend="target", text=docs.pick(stage), color="black")
+            text += "  → {} {:.5g}".format(docs.pick(stage), stage["target"])
         if stage is not None and stage.get("rejected"):
             text += "  ({} outlier{} replaced)".format(stage["rejected"], "" if stage["rejected"] == 1 else "s")
         if scan.exit_status and scan.exit_status != "success":

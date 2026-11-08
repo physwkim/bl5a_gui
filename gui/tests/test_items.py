@@ -163,7 +163,7 @@ class BlockTest(unittest.TestCase):
         return dict(self.SCAN, **{key: value})
 
     def test_each_kind(self):
-        for b in (self.SCAN,
+        for b in (self.SCAN, self.with_("dip", True), self.with_("dip", False), dict(self.SCAN, pick="EDGE", dip=False),
                   {"kind": "scan", "type": "lup", "motor": "th", "start": -0.6, "finish": 0.6, "intervals": 30,
                    "time": 0.5, "settle": 0.1, "counter": "det", "pick": "CEN", "set": 0, "note": "half-cut"},
                   {"kind": "move", "moves": [["tth", 1], ["th", 0]]},
@@ -182,6 +182,8 @@ class BlockTest(unittest.TestCase):
             (self.with_("intervals", 10), "block 1 (scan): unknown field intervals"),
             (self.with_("counter", "sec"), "counter must be one of"),
             (self.with_("pick", "cen"), "pick must be one of"),
+            (self.with_("dip", 1), "dip must be true or false, got 1"),
+            (dict(self.SCAN, pick="EDGE", dip=True), "block 1 (scan): dip is for CEN, COM and xMAX, not EDGE"),
             (self.with_("set", "0"), "set must be a number"),
             ({"kind": "move", "moves": []}, "moves must be"),
             ({"kind": "move", "moves": [["th", 1], ["th", 2]]}, "th twice"),

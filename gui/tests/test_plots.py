@@ -48,6 +48,17 @@ class ScanTabTest(unittest.TestCase):
         self.assertEqual((m["CEN"], m["COM"], m["MAX"], m["target"]), (f.cen, f.com, f.xpk, f.cen))
         self.assertIn("(1 outlier replaced)", self.tab.stats.text())
 
+    def test_dip_stage_names_its_minimum(self):
+        f = peak.stats(X, FILTERED)
+        stage = {"pick": "pl_xMAX", "dip": True, "target": f.xpk, "cen": f.cen, "com": f.com, "xmax": f.xpk,
+                 "fwhm": f.fwhm, "ymax": f.ymax, "rejected": 0}
+        self.tab.stage(self.scan, stage)
+        m = self.marks()
+        self.assertEqual((m["MIN"], m["target"]), (f.xpk, f.xpk))
+        self.assertNotIn("MAX", m)
+        self.assertIn("DIP {:.5g} at".format(f.ymax), self.tab.stats.text())
+        self.assertIn("→ pl_xMAX dip", self.tab.stats.text())
+
     def test_stage_with_nothing_replaced_or_a_null_statistic(self):
         f = peak.stats(X, FILTERED)
         stage = {"pick": "CEN", "target": f.cen, "cen": f.cen, "com": None, "xmax": f.xpk, "fwhm": f.fwhm,

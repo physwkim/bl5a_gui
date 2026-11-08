@@ -81,6 +81,9 @@ class SequencesTest(unittest.TestCase):
         # A scan reads as the Stages table names it, SPEC's argument order.
         self.assertIn("ascan tth -0.04 0.04 24 0.3  det → CEN, set 0", film)
         self.assertIn("cscan shold -3 -1.5 5 0.05  det → EDGE", film)
+        tth = next(b for b in sequences.get("Thin film") if b["kind"] == "scan")
+        dip = dict(tth, dip=True)
+        self.assertTrue(sequences.text(dip).endswith("det → CEN dip, set 0"), sequences.text(dip))
 
     def test_lines_number_a_loop_s_blocks_inside_it(self):
         blocks = [{"kind": "erase"},

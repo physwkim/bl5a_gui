@@ -1,21 +1,40 @@
 //! What an alignment scan must show before its motor moves. A point far
 //! off its neighbours is put back to their median: a cscan's second
 //! sample counts about 1.7 times as long as the rest, enough to be the
-//! maximum `CEN` and `pl_xMAX` follow. Then a scan whose peak or edge
-//! does not stand out of the noise, is not inside the range, or is one
-//! point wide gives no target.
+//! maximum `CEN` and `pl_xMAX` follow. Then a scan whose peak, dip or
+//! edge does not stand out of the noise, is not inside the range, or is
+//! one point wide gives no target.
 
 use crate::peak::{Stats, half};
 
-/// The statistic an alignment scan's motor goes to.
+/// splot's statistic of a peak.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Stat {
+    /// `CEN`.
+    Cen,
+    /// `pl_COM`.
+    Com,
+    /// `pl_xMAX`.
+    XMax,
+}
+
+impl Stat {
+    fn of(self, s: &Stats) -> f64 {
+        match self {
+            Stat::Cen => s.cen,
+            Stat::Com => s.com,
+            Stat::XMax => s.xpk,
+        }
+    }
+}
+
+/// What an alignment scan's motor goes to.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Pick {
-    /// `CEN` of a peak.
-    Cen,
-    /// `pl_COM` of a peak.
-    Com,
-    /// `pl_xMAX` of a peak.
-    XMax,
+    Peak(Stat),
+    /// The statistic of the scan turned over, its maximum less each
+    /// point: the dip becomes a peak over a floor of zero.
+    Dip(Stat),
     /// Where a half-cut scan's sample takes half the beam: the crossing
     /// halfway between the maximum and the floor under the blocked beam,
     /// on the one side the scan falls below half its maximum. The macros'
@@ -27,18 +46,50 @@ pub enum Pick {
 impl Pick {
     pub fn name(self) -> &'static str {
         match self {
-            Pick::Cen => "CEN",
-            Pick::Com => "pl_COM",
-            Pick::XMax => "pl_xMAX",
+            Pick::Peak(s) | Pick::Dip(s) => match s {
+                Stat::Cen => "CEN",
+                Stat::Com => "pl_COM",
+                Stat::XMax => "pl_xMAX",
+            },
             Pick::Edge => "EDGE",
+        }
+    }
+
+    fn feature(self) -> &'static str {
+        match self {
+            Pick::Peak(_) => "peak",
+            Pick::Dip(_) => "dip",
+            Pick::Edge => "edge",
         }
     }
 }
 
+/// How a peak's tests name what they find, and how a dip's do, of the
+/// scan turned over.
+struct Words {
+    feature: &'static str,
+    extreme: &'static str,
+    leave: &'static str,
+    height: &'static str,
+}
+
+const PEAK: Words = Words {
+    feature: "peak",
+    extreme: "maximum",
+    leave: "fall",
+    height: "maximum",
+};
+const DIP: Words = Words {
+    feature: "dip",
+    extreme: "minimum",
+    leave: "rise",
+    height: "depth",
+};
+
 /// A scan with a target.
 #[derive(Debug)]
 pub struct Screened {
-    /// splot's statistics of the filtered points.
+    /// splot's statistics of the filtered points, turned over for a dip.
     pub stats: Stats,
     pub target: f64,
     /// How many points the filter replaced.
@@ -158,7 +209,7 @@ impl Bins {
     /// The bins fall below the first largest on both sides, by more than
     /// `MIN_FALL` σ of a difference of two bins: a peak past an end, whose
     /// end point noise put below the one before it, does not.
-    fn falls(&self) -> Result<(), String> {
+    fn falls(&self, w: &Words) -> Result<(), String> {
         let m = &self.means;
         let top = (0..m.len()).fold(0, |t, i| if m[i] > m[t] { i } else { t });
         let least = MIN_FALL * std::f64::consts::SQRT_2 * self.sigma;
@@ -166,7 +217,8 @@ impl Bins {
             let low = part.iter().copied().fold(f64::INFINITY, f64::min);
             if m[top] - low <= least {
                 return Err(format!(
-                    "the scan does not fall {side} its maximum: no peak in the range"
+                    "the scan does not {} {side} its {}: no {} in the range",
+                    w.leave, w.extreme, w.feature
                 ));
             }
         }
@@ -210,32 +262,32 @@ fn edge(x: &[f64], y: &[f64], bins: &Bins) -> Result<f64, String> {
 /// The scan's statistics and `pick`'s target, or why it has none.
 pub fn screen(x: &[f64], y: &[f64], pick: Pick) -> Result<Screened, String> {
     let (y, rejected) = hampel(y);
+    if y.is_empty() {
+        return Err("the scan has no points".into());
+    }
     if y.iter().any(|v| !v.is_finite()) {
         return Err("the scan has a run of points that are not numbers".into());
     }
-    let stats = Stats::of(x, &y).ok_or("the scan has no points")?;
     let bins = Bins::of(&y);
     let (part, snr) = bins.contrast();
     if !(part >= MIN_CONTRAST && snr >= MIN_SNR) {
-        let what = if let Pick::Edge = pick {
-            "edge"
-        } else {
-            "peak"
-        };
         return Err(format!(
-            "no {what} visible: the scan changes by {:.0}% of its maximum, {snr:.1} times its noise",
+            "no {} visible: the scan changes by {:.0}% of its maximum, {snr:.1} times its noise",
+            pick.feature(),
             part * 100.0
         ));
     }
-    if !matches!(pick, Pick::Edge) {
-        inside(&y, stats.ymax)?;
-        bins.falls()?;
-    }
-    let target = match pick {
-        Pick::Cen => stats.cen,
-        Pick::Com => stats.com,
-        Pick::XMax => stats.xpk,
-        Pick::Edge => edge(x, &y, &bins)?,
+    let (stats, target) = match pick {
+        Pick::Peak(stat) => peak_target(x, &y, stat, &PEAK)?,
+        Pick::Dip(stat) => {
+            let top = y.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+            let turned: Vec<f64> = y.iter().map(|v| top - v).collect();
+            peak_target(x, &turned, stat, &DIP)?
+        }
+        Pick::Edge => (
+            Stats::of(x, &y).expect("the scan has points"),
+            edge(x, &y, &bins)?,
+        ),
     };
     if !target.is_finite() {
         return Err(format!("{} is {target}", pick.name()));
@@ -247,11 +299,19 @@ pub fn screen(x: &[f64], y: &[f64], pick: Pick) -> Result<Screened, String> {
     })
 }
 
+/// The statistics of a peak inside the range, and `stat` of them.
+fn peak_target(x: &[f64], y: &[f64], stat: Stat, w: &Words) -> Result<(Stats, f64), String> {
+    let stats = Stats::of(x, y).expect("the scan has points");
+    inside(y, stats.ymax, w)?;
+    Bins::of(y).falls(w)?;
+    Ok((stats, stat.of(&stats)))
+}
+
 /// A peak inside the range: its maximum not an end point, and a
 /// neighbour above half of it. With both neighbours at or below half,
 /// splot's crossings are the neighbours and `CEN` the maximum, whatever
 /// the peak's width.
-fn inside(y: &[f64], ymax: f64) -> Result<(), String> {
+fn inside(y: &[f64], ymax: f64, w: &Words) -> Result<(), String> {
     let i = y
         .iter()
         .position(|&v| v == ymax)
@@ -261,12 +321,16 @@ fn inside(y: &[f64], ymax: f64) -> Result<(), String> {
     } else if i + 1 == y.len() {
         "last"
     } else if y[i - 1] <= ymax / 2.0 && y[i + 1] <= ymax / 2.0 {
-        return Err("the peak is one point wide at half maximum".into());
+        return Err(format!(
+            "the {} is one point wide at half {}",
+            w.feature, w.height
+        ));
     } else {
         return Ok(());
     };
     Err(format!(
-        "the maximum is the scan's {end} point: no peak in the range"
+        "the {} is the scan's {end} point: no {} in the range",
+        w.extreme, w.feature
     ))
 }
 
@@ -331,7 +395,7 @@ mod tests {
         let x = grid(0.0, 1.0, 101);
         let mut y = gauss(&x, 0.5, 0.08, 50.0);
         (y[20], y[21], y[70]) = (3000.0, 3000.0, f64::NAN);
-        let s = screen(&x, &y, Pick::Cen).unwrap();
+        let s = screen(&x, &y, Pick::Peak(Stat::Cen)).unwrap();
         assert_eq!(s.rejected, 3);
         assert!((s.target - 0.5).abs() < 0.01, "{}", s.target);
     }
@@ -340,7 +404,7 @@ mod tests {
     fn flat_scan_shows_nothing() {
         let x = grid(0.0, 1.0, 101);
         let high = counts(&x, |_| 1000.0);
-        assert!(fails(&x, &high, Pick::Cen).starts_with("no peak visible"));
+        assert!(fails(&x, &high, Pick::Peak(Stat::Cen)).starts_with("no peak visible"));
         // Over 10% from bin to bin, but only by counting noise.
         let x = grid(0.0, 1.0, 401);
         let low = counts(&x, |_| 10.0);
@@ -391,9 +455,15 @@ mod tests {
     fn peak_at_the_end_has_no_target() {
         let x = grid(0.0, 1.0, 21);
         let y: Vec<f64> = x.iter().map(|x| 100.0 + 1000.0 * x).collect();
-        assert!(fails(&x, &y, Pick::XMax).starts_with("the maximum is the scan's last point"));
+        assert!(
+            fails(&x, &y, Pick::Peak(Stat::XMax))
+                .starts_with("the maximum is the scan's last point")
+        );
         let y: Vec<f64> = y.into_iter().rev().collect();
-        assert!(fails(&x, &y, Pick::Com).starts_with("the maximum is the scan's first point"));
+        assert!(
+            fails(&x, &y, Pick::Peak(Stat::Com))
+                .starts_with("the maximum is the scan's first point")
+        );
     }
 
     /// A peak past the last point, whose last point noise put below the
@@ -404,12 +474,18 @@ mod tests {
         let x = grid(0.0, 1.0, 21);
         let mut y = gauss(&x, 1.05, 0.2, 50.0);
         y[20] = y[19] - 20.0;
-        assert!(fails(&x, &y, Pick::Cen).starts_with("the scan does not fall after its maximum"));
+        assert!(
+            fails(&x, &y, Pick::Peak(Stat::Cen))
+                .starts_with("the scan does not fall after its maximum")
+        );
         let y: Vec<f64> = y.into_iter().rev().collect();
-        assert!(fails(&x, &y, Pick::Cen).starts_with("the scan does not fall before its maximum"));
+        assert!(
+            fails(&x, &y, Pick::Peak(Stat::Cen))
+                .starts_with("the scan does not fall before its maximum")
+        );
         // A peak inside the range falls on both sides.
         let y = gauss(&x, 0.85, 0.05, 50.0);
-        assert!(screen(&x, &y, Pick::Cen).is_ok());
+        assert!(screen(&x, &y, Pick::Peak(Stat::Cen)).is_ok());
     }
 
     #[test]
@@ -418,9 +494,9 @@ mod tests {
         let mut y = vec![10.0; 21];
         y[9..12].copy_from_slice(&[40.0, 100.0, 50.0]);
         assert_eq!(hampel(&y).1, 0);
-        assert!(fails(&x, &y, Pick::Cen).ends_with("one point wide at half maximum"));
+        assert!(fails(&x, &y, Pick::Peak(Stat::Cen)).ends_with("one point wide at half maximum"));
         y[11] = 51.0;
-        assert!(screen(&x, &y, Pick::Cen).is_ok());
+        assert!(screen(&x, &y, Pick::Peak(Stat::Cen)).is_ok());
     }
 
     /// A th scan narrower than the rocking curve: splot's `CEN` is the
@@ -429,8 +505,61 @@ mod tests {
     fn peak_wider_than_the_scan_goes_to_its_maximum() {
         let x = grid(-0.6, 0.6, 31);
         let y = counts(&x, |x| 1000.0 * (-((x - 0.1) / 1.2).powi(2) / 2.0).exp());
-        let s = screen(&x, &y, Pick::Cen).unwrap();
+        let s = screen(&x, &y, Pick::Peak(Stat::Cen)).unwrap();
         assert!((s.target - s.stats.xpk).abs() < 1e-12, "{}", s.target);
         assert!((s.target - 0.1).abs() < 0.2, "{}", s.target);
+    }
+
+    /// 1000 counts, 700 fewer at the bottom of a dip at `at`.
+    fn dip(x: &[f64], at: f64) -> Vec<f64> {
+        counts(x, |x| {
+            1000.0 - 700.0 * (-((x - at) / 0.05).powi(2) / 2.0).exp()
+        })
+    }
+
+    /// The statistics are of the scan turned over: the dip's depth is
+    /// their maximum. `pl_COM` leans to the middle of the range, by the
+    /// baseline's noise turned over into counts.
+    #[test]
+    fn dip_goes_to_its_bottom() {
+        let x = grid(0.0, 1.0, 101);
+        let y = dip(&x, 0.437);
+        for (stat, within) in [(Stat::Cen, 0.005), (Stat::XMax, 0.02), (Stat::Com, 0.03)] {
+            let s = screen(&x, &y, Pick::Dip(stat)).unwrap();
+            assert!((s.target - 0.437).abs() < within, "{stat:?} {}", s.target);
+            assert!((s.stats.ymax - 700.0).abs() < 80.0, "{}", s.stats.ymax);
+        }
+    }
+
+    #[test]
+    fn dip_and_peak_are_not_each_other() {
+        let x = grid(0.0, 1.0, 101);
+        let y = dip(&x, 0.437);
+        assert!(fails(&x, &y, Pick::Peak(Stat::Cen)).ends_with("no peak in the range"));
+        let y = gauss(&x, 0.5, 0.08, 50.0);
+        assert!(fails(&x, &y, Pick::Dip(Stat::Cen)).ends_with("no dip in the range"));
+        let flat = counts(&x, |_| 1000.0);
+        assert!(fails(&x, &flat, Pick::Dip(Stat::Cen)).starts_with("no dip visible"));
+    }
+
+    #[test]
+    fn dip_at_the_end_has_no_target() {
+        let x = grid(0.0, 1.0, 21);
+        let y: Vec<f64> = x.iter().map(|x| 1100.0 - 1000.0 * x).collect();
+        assert_eq!(
+            fails(&x, &y, Pick::Dip(Stat::XMax)),
+            "the minimum is the scan's last point: no dip in the range"
+        );
+    }
+
+    #[test]
+    fn dip_one_point_wide_has_no_target() {
+        let x = grid(0.0, 2.0, 21);
+        let mut y = vec![100.0; 21];
+        y[9..12].copy_from_slice(&[70.0, 10.0, 60.0]);
+        assert_eq!(hampel(&y).1, 0);
+        assert!(fails(&x, &y, Pick::Dip(Stat::Cen)).ends_with("one point wide at half depth"));
+        y[11] = 50.0;
+        assert!(screen(&x, &y, Pick::Dip(Stat::Cen)).is_ok());
     }
 }

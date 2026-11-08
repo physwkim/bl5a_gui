@@ -292,7 +292,8 @@ FullFileName_RBV), 온도(`BL5A:TC:*`), suspender용 링
   반치에 닿지 않거나 양쪽에서 닿으면 모터를 스캔 전 위치로 되돌리고 plan을
   실패시킨다. half-cut shold 단계는 CEN 대신 최대와 바닥의 중간 교차점(EDGE)으로
   간다. 바닥은 최저 구간에서 잡음 안에 드는 구간이 3개 이상이면 스캔 최소값,
-  아니면(경사에서 끝난 스캔) 0이다. 에지의
+  아니면(경사에서 끝난 스캔) 0이다. 딥(dip)은 필터 뒤 점을 뒤집어(최대 − 각
+  점) 피크와 같은 검사와 통계를 쓰고, 보이는지는 뒤집기 전 점으로 본다. 에지의
   CEN은 교차점과 평탄부의 잡음 최대점의 중간이라, 빔라인에서 같은 에지를 네 번
   스캔했을 때 CEN은 0.24, 교차점은 0.007 안에서 움직였다.
 - `umv m CEN; set m 0`은 motor 레코드 이동과 `set_position`(SV_CMD `set`)이다.
@@ -332,7 +333,8 @@ FullFileName_RBV), 온도(`BL5A:TC:*`), suspender용 링
 
 정렬은 블록 목록(`qs/src/plans/blocks.rs`)이다. 블록은 scan(type
 ascan·lup·cscan·clup, motor, start, finish, time, 스텝이면 intervals·settle,
-fly면 sleep, counter, pick CEN·COM·xMAX·EDGE, set), move(`umv`할 [motor,
+fly면 sleep, counter, pick CEN·COM·xMAX·EDGE, dip(참이면 딥의 CEN·COM·xMAX,
+EDGE와는 함께 못 씀), set), move(`umv`할 [motor,
 pos] 쌍), spec(명령 한 줄), wait(초), erase(mar345 판 지우기), loop(제
 `blocks`를 순서대로 `times`번; loop 안에 loop도 된다) 여섯 가지이고,
 어느 블록이든 `when`({motor, op `<`·`>`, value}: 그 조건일 때만 실행; loop는

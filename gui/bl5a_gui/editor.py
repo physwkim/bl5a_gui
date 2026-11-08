@@ -148,15 +148,21 @@ class BlockDialog(qt.QDialog):
             self.pick = _combo(items.PICKS, b["pick"])
             self.pick.setToolTip("Where the motor goes after the scan: CEN (FWHM centre), COM (centre of mass),\n"
                                  "xMAX (the maximum) or EDGE (the half-height edge of a step)")
+            self.dip = qt.QCheckBox("of a dip")
+            self.dip.setChecked(bool(b.get("dip")))
+            self.dip.setToolTip("The scan dips rather than peaks: CEN, COM and xMAX of the scan turned over,\n"
+                                "its maximum less each point. Not for EDGE.")
             self.set = _line(_g(b.get("set")))
             self.set.setToolTip("Empty: keep the motor's position; a number: `set motor <number>` there")
             for label, w in (("Type", self.type), ("Motor", self.motor), ("Start", self.start),
                              ("Finish", self.finish), ("Intervals", self.intervals), ("Time [s]", self.time),
                              ("Settle [s]", self.settle), ("Sleep [s]", self.sleep), ("Counter", self.counter),
-                             ("Go to", self.pick), ("Set to", self.set)):
+                             ("Go to", self.pick), ("", self.dip), ("Set to", self.set)):
                 form.addRow(label, w)
             self.type.currentTextChanged.connect(self._type)
             self._type()
+            self.pick.currentTextChanged.connect(self._pick)
+            self._pick()
         elif self.kind == "move":
             self.moves = _line(" ".join("{} {}".format(m, _g(x)) for m, x in b["moves"]))
             self.moves.setToolTip("Motor position pairs, moved together as umv moves them: tth 1 th 0")
@@ -196,6 +202,9 @@ class BlockDialog(qt.QDialog):
         self.settle.setEnabled(not fly)
         self.sleep.setEnabled(fly)
 
+    def _pick(self):
+        self.dip.setEnabled(self.pick.currentText() != "EDGE")
+
     def block(self):
         """The block the fields give, as qs takes it; Invalid otherwise."""
         b = {"kind": self.kind}
@@ -208,6 +217,8 @@ class BlockDialog(qt.QDialog):
             else:
                 b.update(intervals=self.intervals.value(), settle=_num(self.settle, "settle"))
             b.update(counter=self.counter.currentText(), pick=self.pick.currentText())
+            if self.dip.isEnabled() and self.dip.isChecked():
+                b["dip"] = True
             if self.set.text().strip():
                 b["set"] = _num(self.set, "set")
         elif self.kind == "move":

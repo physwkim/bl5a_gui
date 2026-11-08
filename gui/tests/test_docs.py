@@ -103,6 +103,8 @@ class Alignment(Recorded):
                 self.assertTrue(stage["stage"].startswith(scan.title), scan.title)
                 y, replaced = hampel(scan.y)
                 self.assertEqual(replaced, stage["rejected"])
+                if stage.get("dip"):
+                    y = [max(y) - v for v in y]
                 got = peak.stats(scan.x, y)
                 for key, field in (("xmax", "xpk"), ("ymax", "ymax"), ("com", "com"), ("cen", "cen"),
                                    ("fwhm", "fwhm")):

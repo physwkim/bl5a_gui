@@ -365,7 +365,7 @@ not starting with `.`, without `/` or `\`, and not Coin cell or Thin film.
 
 | Block | Fields | What it does |
 | --- | --- | --- |
-| scan | type, motor, start, finish, time; intervals and settle (ascan, lup) or sleep (cscan, clup); counter; go to; set to | scans, checks the scan ([Before a stage moves](#before-a-stage-moves)), moves the motor to the statistic picked in go to and, when set to has a value, redefines that position with `set`; ascan and cscan are absolute, lup and clup relative to where the motor is |
+| scan | type, motor, start, finish, time; intervals and settle (ascan, lup) or sleep (cscan, clup); counter; go to; of a dip; set to | scans, checks the scan ([Before a stage moves](#before-a-stage-moves)), moves the motor to the statistic picked in go to and, when set to has a value, redefines that position with `set`; ascan and cscan are absolute, lup and clup relative to where the motor is |
 | move | motor position pairs, `tth 1 th 0` | `umv` of them together |
 | spec | one command line | sends it to SPEC |
 | wait | seconds | waits |
@@ -425,6 +425,12 @@ open-beam plateau the maximum is wherever the noise puts it: over four
 scans of one edge on the beamline CEN moved by 0.24 while the half point
 stayed within 0.007.
 
+A scan block with **of a dip** checked goes to CEN, COM or xMAX of a
+dip: of the scan turned over, its maximum less each point, so the dip's
+bottom is the maximum and the plateau around it zero. CEN is then the
+centre at half the dip's depth and xMAX the scan's minimum. EDGE has no
+dip form.
+
 ### Before a stage moves
 
 A point more than 3σ from the median of itself and the two points either
@@ -441,7 +447,9 @@ ends the plan, which fails with the reason Messages shows, when
 - the scan shows nothing: averaged into 25 bins, it changes by less than
   10% of its largest bin, or by less than 5 times the noise of a bin;
 - a peak's maximum is the scan's first or last point, or both of its
-  neighbours are at or below half of it (a peak one point wide);
+  neighbours are at or below half of it (a peak one point wide); for a
+  dip, the same of the scan turned over: the minimum is an end point, or
+  the dip is one point wide at half its depth;
 - the bins on either side of a peak's largest bin do not fall below it
   by more than 3 times the noise of a difference of two bins: the peak
   may lie past the end, with the end point's noise putting it below the
@@ -465,7 +473,7 @@ row without alignment.
 | Column | Shows | Tooltip |
 | --- | --- | --- |
 | Stage | the scan, as a SPEC command line | |
-| Pick | the statistic the motor was moved to: CEN, pl_COM, pl_xMAX or EDGE | the target position |
+| Pick | the statistic the motor was moved to: CEN, pl_COM, pl_xMAX or EDGE, followed by `dip` for a dip | the target position |
 | Before → after | the motor before the scan, and after the move and any `set` | |
 | CEN | the centre at half maximum | COM and the position of the maximum |
 | FWHM | the full width at half maximum | |
@@ -474,7 +482,8 @@ row without alignment.
 
 The statistics are splot's (`CEN`, `pl_COM`, `pl_xMAX`), the ones SPEC's
 macros read, of the points after the outlier filter (see
-[Before a stage moves](#before-a-stage-moves)).
+[Before a stage moves](#before-a-stage-moves)); a dip's are of those
+points turned over.
 
 ### Alignment history
 
@@ -517,7 +526,8 @@ the stage picked CEN, so the black target lies on the red CEN line. A
 stage's scan shows the stage's statistics, of the points after the
 outlier filter, and how many points the filter replaced; the curve is
 the points as taken, so where a point was replaced the markers can lie
-off it. Any other scan shows the statistics of its points as taken. A
+off it. A dip's stage gives DIP, its depth, and its position for the
+maximum, and marks the minimum MIN. Any other scan shows the statistics of its points as taken. A
 scan that did not end in success shows its exit
 status and why; the whole line is in its tooltip when it does not fit.
 

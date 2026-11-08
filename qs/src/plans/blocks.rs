@@ -2,8 +2,8 @@
 //! blocks it runs, as a list of objects, each with a `kind`:
 //!
 //! - `scan`: an alignment scan (`type` ascan, lup, cscan or clup), then the
-//!   motor to the scan's `pick` (CEN, COM, xMAX, EDGE) and, given `set`,
-//!   `set motor <set>`;
+//!   motor to the scan's `pick` (CEN, COM, xMAX, EDGE), of its dip given
+//!   `dip` true (not EDGE), and, given `set`, `set motor <set>`;
 //! - `move`: `umv`, the `moves` ([motor, position] pairs) together;
 //! - `spec`: a SPEC command line;
 //! - `wait`: `seconds`;
@@ -24,7 +24,7 @@ use super::Ops;
 use crate::ctx::Step;
 use crate::devices::{AXES, CHANNELS, Holder};
 use crate::scan::{Motion, Scan};
-use crate::screen::Pick;
+use crate::screen::{Pick, Stat};
 
 /// The positions an alignment's "final" event records once its blocks
 /// ran: coin_align's closing `wm2`.
@@ -144,6 +144,16 @@ impl<'a> Fields<'a> {
         Ok(x)
     }
 
+    /// A boolean, `false` when absent or null.
+    fn flag(&mut self, key: &'static str) -> Result<bool, String> {
+        match self.take(key) {
+            None => Ok(false),
+            Some(v) => v
+                .as_bool()
+                .ok_or_else(|| self.err(format!("{key} must be true or false, got {v}"))),
+        }
+    }
+
     fn text(&mut self, key: &'static str) -> Result<&'a str, String> {
         let v = self.need(key)?;
         v.as_str()
@@ -178,11 +188,12 @@ const TYPES: [(&str, bool, bool); 4] = [
     ("cscan", false, true),
     ("clup", true, true),
 ];
-const PICKS: [(&str, Pick); 4] = [
-    ("CEN", Pick::Cen),
-    ("COM", Pick::Com),
-    ("xMAX", Pick::XMax),
-    ("EDGE", Pick::Edge),
+/// The picks by name: a statistic of a peak or a dip, or `None` for EDGE.
+const PICKS: [(&str, Option<Stat>); 4] = [
+    ("CEN", Some(Stat::Cen)),
+    ("COM", Some(Stat::Com)),
+    ("xMAX", Some(Stat::XMax)),
+    ("EDGE", None),
 ];
 const KINDS: [&str; 6] = ["scan", "move", "spec", "wait", "erase", "loop"];
 
@@ -216,7 +227,13 @@ fn scan(f: &mut Fields<'_>) -> Result<ScanBlock, String> {
     };
     let counter = f.one_of("counter", &counters())?;
     let pick = f.one_of("pick", &PICKS.map(|p| p.0))?;
-    let pick = PICKS.iter().find(|p| p.0 == pick).expect("one of PICKS").1;
+    let stat = PICKS.iter().find(|p| p.0 == pick).expect("one of PICKS").1;
+    let pick = match (stat, f.flag("dip")?) {
+        (Some(s), false) => Pick::Peak(s),
+        (Some(s), true) => Pick::Dip(s),
+        (None, false) => Pick::Edge,
+        (None, true) => return Err(f.err("dip is for CEN, COM and xMAX, not EDGE")),
+    };
     Ok(ScanBlock {
         motor,
         start,
@@ -424,7 +441,7 @@ mod tests {
                     sleep: Duration::from_millis(100)
                 },
                 counter: "ic1",
-                pick: Pick::Com,
+                pick: Pick::Peak(Stat::Com),
                 set: None,
             })
         );
@@ -452,16 +469,16 @@ mod tests {
         assert_eq!(
             scans,
             [
-                ("tth", Pick::Cen, Some(0.0)),
-                ("nu", Pick::Cen, Some(0.0)),
+                ("tth", Pick::Peak(Stat::Cen), Some(0.0)),
+                ("nu", Pick::Peak(Stat::Cen), Some(0.0)),
                 ("shold", Pick::Edge, None),
-                ("th", Pick::XMax, Some(0.0)),
+                ("th", Pick::Peak(Stat::XMax), Some(0.0)),
                 ("shold", Pick::Edge, None),
-                ("th", Pick::Cen, None),
+                ("th", Pick::Peak(Stat::Cen), None),
                 ("shold", Pick::Edge, None),
-                ("th", Pick::Cen, Some(0.0)),
+                ("th", Pick::Peak(Stat::Cen), Some(0.0)),
                 ("shold", Pick::Edge, None),
-                ("th", Pick::XMax, Some(0.6)),
+                ("th", Pick::Peak(Stat::XMax), Some(0.6)),
             ]
         );
         assert_eq!(film.last().unwrap().action, Action::Erase);
@@ -552,6 +569,24 @@ mod tests {
         );
         assert!(with("counter", json!("sec")).contains("counter must be one of"));
         assert!(with("pick", json!("cen")).contains("pick must be one of"));
+        assert!(with("dip", json!(1)).contains("dip must be true or false, got 1"));
+        let pick = |b: Value| -> Result<Pick, String> {
+            match one(b)?.action {
+                Action::Scan(s) => Ok(s.pick),
+                other => panic!("{other:?}"),
+            }
+        };
+        let mut dip = scan.clone();
+        dip["dip"] = json!(true);
+        assert_eq!(pick(dip.clone()), Ok(Pick::Dip(Stat::Com)));
+        dip["dip"] = json!(false);
+        assert_eq!(pick(dip.clone()), Ok(Pick::Peak(Stat::Com)));
+        dip["dip"] = json!(true);
+        dip["pick"] = json!("EDGE");
+        assert_eq!(
+            pick(dip),
+            Err("p: block 1 (scan): dip is for CEN, COM and xMAX, not EDGE".into())
+        );
         assert!(with("set", json!("0")).contains("set must be a number"));
         let e = parse("p", &json!([{"kind": "erase"}, {"kind": "jump"}])).unwrap_err();
         assert!(e.starts_with("p: block 2: kind must be one of"), "{e}");

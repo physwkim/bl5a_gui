@@ -74,7 +74,7 @@ class StagesTable(_Table):
     def add(self, stage):
         moved = "{} → {}".format(_fmt(stage.get("before")), _fmt(stage.get("after")))
         self.appendRow(
-            (str(stage.get("stage") or ""), str(stage.get("pick") or ""), moved, _fmt(stage.get("cen")),
+            (str(stage.get("stage") or ""), docs.pick(stage), moved, _fmt(stage.get("cen")),
              _fmt(stage.get("fwhm"), 3), _fmt(stage.get("rejected")),
              "" if stage.get("set") is None else _fmt(stage.get("set"))),
             (None, "target {}".format(_fmt(stage.get("target"))), None,

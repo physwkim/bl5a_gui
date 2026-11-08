@@ -338,7 +338,12 @@ def _scan(f):
         f.num("intervals", lambda n: n >= 1 and n == int(n), "a whole number >= 1")
         f.num("settle", lambda s: s >= 0, "seconds >= 0")
     f.one_of("counter", COUNTERS)
-    f.one_of("pick", PICKS)
+    pick = f.one_of("pick", PICKS)
+    dip = f.take("dip")
+    if dip is not None and not isinstance(dip, bool):
+        raise f.err("dip must be true or false, got {!r}".format(dip))
+    if dip and pick == "EDGE":
+        raise f.err("dip is for CEN, COM and xMAX, not EDGE")
     if f.block.get("set") is not None:
         f.num("set")
     f.take("set")

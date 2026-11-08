@@ -140,6 +140,8 @@ def text(b):
             how = "{} {}".format(b["intervals"], _g(b["time"]))
         line = "{} {} {} {} {}  {} → {}".format(b["type"], b["motor"], _g(b["start"]), _g(b["finish"]), how,
                                                 b["counter"], b["pick"])
+        if b.get("dip"):
+            line += " dip"
         if b.get("set") is not None:
             line += ", set {}".format(_g(b["set"]))
     elif kind == "move":

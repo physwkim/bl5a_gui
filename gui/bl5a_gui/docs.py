@@ -78,6 +78,12 @@ def what(plan, sequence=None):
     return "{}: {}".format(plan, sequence) if sequence else plan
 
 
+def pick(stage):
+    """What a stage moved its motor to: "CEN", or "CEN dip" when the
+    statistics are of the scan turned over."""
+    return "{}{}".format(stage.get("pick") or "target", " dip" if stage.get("dip") else "")
+
+
 def outcome(exit_status, reason=None):
     """An exit status with the reason the run or item ended so, if any."""
     return "{}: {}".format(exit_status, reason) if reason else exit_status
