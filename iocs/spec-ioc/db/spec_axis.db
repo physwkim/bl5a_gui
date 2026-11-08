@@ -16,6 +16,17 @@ record(motor, "$(P)$(M)") {
     field(FOFF, "Frozen")
 }
 
+# A request SPEC refused (MSTA RA_PROBLEM) leaves VAL at its target, and
+# TWF, TWR and RLV step from VAL: SYNC puts it back on the readback.
+record(calcout, "$(P)$(M):Resync") {
+    field(INPA, "$(P)$(M).MSTA CP")
+    field(CALC, "A&512")
+    field(OOPT, "When Non-zero")
+    field(OUT,  "$(P)$(M).SYNC PP")
+    field(DOPT, "Use OCAL")
+    field(OCAL, "1")
+}
+
 record(ai, "$(P)$(M):SpecVelo") {
     field(DTYP, "asynFloat64")
     field(INP,  "@asyn($(SPORT),$(ADDR))SPEC_VELO")

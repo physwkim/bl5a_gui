@@ -211,7 +211,11 @@ SPEC 데이터 파일은 흉내 내지 않으므로 `#Temp:` 줄과 loopscan 점
   45로 올린 뒤 tth 81과 함께 martran 25로 넣고, tth 42와 함께 1234로 뺀 뒤
   tth 1로 내리고, align_in은 martran < 1200이면 `mar_ip_mode off`를
   부른다). motor 레코드의 이동은 상태 락 아래에서 거절한다(qs의 `umv tth 81 martran 25`는 tth 이동을 먼저 보내므로 목표가
-  40 이상인 tth 이동 중의 mar 이동은 통과한다). SPEC 자신의 이동은 거절할
+  40 이상인 tth 이동 중의 mar 이동은 통과한다). 거절된 축은
+  `Motion::Refused`가 되어 다음 이동이나 받아들여진 요청까지 problem(MSTA
+  RA_PROBLEM → STATE/MAJOR)을 보이고, 그 비트는 요청의 DONE=0과 함께
+  나간다. spec_axis.db의 `:Resync`가 그때 SYNC로 VAL을 RBV에 되돌린다
+  (TWF·TWR·RLV는 VAL에서 잰다). SPEC 자신의 이동은 거절할
   수 없으므로, 이벤트로 깨진 것을 보면 ^C를 한 번 보낸다(관련 축이 모두
   멈추면 다시 무장). SPEC `mar_ip`의 tth < 80 가드는 그대로 SPEC에 있다.
   `set_position` → SV_CMD `set <mne> <pos>`, stop → speca처럼
