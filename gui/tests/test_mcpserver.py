@@ -144,3 +144,43 @@ def test_stop_all_without_cmd_abort_still_aborts_and_says_so(monkeypatch):
     assert puts == [] and aborts == [1]
     assert "SPEC got no ^C" in got["spec"] and got["plan"] == "abort requested"
     assert "SPEC got no ^C" in bl.messages.since(0, 10)["lines"][-1]
+
+
+class MotorPV:
+    def __init__(self, value=None):
+        self.value, self.puts = value, []
+
+    def put(self, value, wait, timeout):
+        self.puts.append(value)
+        return 1
+
+    def get(self, timeout, use_monitor):
+        return self.value
+
+
+def tweak(monkeypatch, msta):
+    """Beamline.tweak of tth with SPEC free, the record's MSTA `msta` after."""
+    monkeypatch.setattr(mcpserver.epics.ca, "use_initial_context", lambda: None)
+    bl = mcpserver.Beamline("tcp://127.0.0.1:1", "tcp://127.0.0.1:2", "tcp://127.0.0.1:3", "tcp://127.0.0.1:4",
+                            "test")
+    bl.sync = lambda: None
+    bl.qs = {"re_state": "idle"}
+    bl.spec = {"Connected": "Connected", "Busy": "Ready", "Cmd:Busy": "Idle"}
+    base = config.SPEC + "tth"
+    pvs = {f: MotorPV(v) for f, v in ((".TWV", None), (".TWF", None), (".MSTA", msta), (".RBV", 81.0))}
+    bl.pvs.update({base + f: pv for f, pv in pvs.items()})
+    return bl, pvs
+
+
+def test_tweak_returns_the_readback_of_an_accepted_move(monkeypatch):
+    bl, pvs = tweak(monkeypatch, 0x2)
+    got = bl.tweak("tth", 0.5, "forward")
+    assert got["rbv"] == 81.0 and pvs[".TWV"].puts == [0.5] and pvs[".TWF"].puts == [1]
+    assert bl.spec_job is None
+
+
+def test_tweak_of_a_refused_move_is_an_error(monkeypatch):
+    bl, _ = tweak(monkeypatch, 0x2 | mcpserver.MSTA_PROBLEM)
+    with pytest.raises(mcpserver.ToolError, match="SPEC refused the tth move"):
+        bl.tweak("tth", 0.5, "forward")
+    assert bl.spec_job is None

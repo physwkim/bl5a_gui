@@ -60,6 +60,7 @@ QS_KEYS = ("manager_state", "re_state", "worker_environment_exists", "items_in_q
 SCANS = 50  # finished and running scans kept
 ALIGNED = 200  # alignment history rows kept
 TWEAK_TIMEOUT = 300.0  # s, for one TWF/TWR move to complete
+MSTA_PROBLEM = 0x200  # motor record MSTA: the driver refused the request
 FRAME_PX = 1024  # frame_image's longest side
 
 
@@ -253,7 +254,8 @@ class Beamline:
                                           connection_callback=self._connected)
         puts = [config.SPEC + s for s in ("Cmd", "Cmd:Status", "Cmd:Reply", "Cmd:Abort")]
         puts += [config.SPEC + m + f for m in config.MOTORS for f in (".TWF", ".TWR")]
-        for name in puts:
+        fresh = [config.SPEC + m + ".MSTA" for m in config.MOTORS]
+        for name in puts + fresh:
             self.pvs[name] = epics.PV(name, auto_monitor=False)
         self.relay.subscribe(self._document)
         self.relay.start()
@@ -575,10 +577,14 @@ class Beamline:
             self.put(base + ".TWV", step, 5.0)
             # A put to TWF/TWR completes when the move does (DMOV 0 → 1).
             self.put(base + (".TWF" if direction == "forward" else ".TWR"), 1, TWEAK_TIMEOUT)
+            msta = self.pvs[base + ".MSTA"].get(timeout=2.0, use_monitor=False)
             rbv = self.pvs[base + ".RBV"].get(timeout=2.0, use_monitor=False)
         finally:
             with self.spec_lock:
                 self.spec_job = None
+        # A refused move completes the put too, with the motor where it was.
+        if msta is not None and int(msta) & MSTA_PROBLEM:
+            raise ToolError("SPEC refused the {} move; spec_log says why".format(motor))
         return {"motor": motor, "direction": direction, "step": step, "rbv": sig(rbv),
                 "unit": self.value(base + ".EGU")[1], "seconds": round(time.time() - t0, 2)}
 
@@ -1110,7 +1116,9 @@ def build(bl):
               step: Annotated[float, Field(gt=0, description="the move, in the motor's unit")],
               direction: Literal["forward", "reverse"]):
         """Move a motor by `step` (its TWV, then TWF or TWR) and return when
-        the move is done, with the readback. Only while SPEC is free."""
+        the move is done, with the readback. Only while SPEC is free. A
+        move SPEC's driver refuses (the mar345 interlock, SPEC busy) is an
+        error."""
         return out(bl.tweak(motor, step, direction))
 
     @tool()
