@@ -164,14 +164,19 @@ to `SPEC` from `bl5a.env`.
 - It tries SPEC again every 2 s while SPEC is not there, so SPEC can start
   before or after it, and restart under it.
 - It serves the motors `sy shold th tth nu scell martran marsdd marshut sx
-  phi` as motor records `BL5A:SPEC:<motor>`, the counters `sec icxrd det
-  ic1` as the scaler `BL5A:SPEC:scaler1` (S1–S4), the command records
+  phi marz marx ipbsx ipbsy` as motor records `BL5A:SPEC:<motor>`, the
+  counters `sec icxrd det ic1` as the scaler `BL5A:SPEC:scaler1` (S1–S4), the command records
   `BL5A:SPEC:Cmd*`, the scan command `BL5A:SPEC:ScanCmd` with SPEC's
   points of it in `BL5A:SPEC:Scan:Data` and `Scan:Cols` once it ends and
   in `Scan:Live:Data` and `Scan:Live:Cols` as SPEC takes them, and the
   console log `BL5A:SPEC:Log`.
 - A motor record's stop sends SPEC `abort_all`, which stops every SPEC
   motor, as `^C` would.
+- `SpecInterlock` in `st.cmd`, before `SpecCreate`, keeps the mar345 off
+  the tth arm: the mar's motors move only with tth >= 40, tth goes below
+  40 only with martran >= 1200. It reads SPEC user positions, so a `set`
+  of tth or martran moves the line with it. Every motor it names must be
+  in `SpecCreate`'s list.
 - Use the site's Channel Access settings. The special ports in the
   README only keep the simulation off the network on a development box.
   If this host already runs an IOC on the default port, put another

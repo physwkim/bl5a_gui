@@ -1,8 +1,8 @@
 //! SPEC IOC.
 //!
 //! Assembles: `SpecCreate` (the SPEC session, its status and command
-//! ports, the motor port and the scaler), the motor and scaler record
-//! types, and the CA + PVA (QSRV) server.
+//! ports, the motor port and the scaler) with `SpecInterlock` before it,
+//! the motor and scaler record types, and the CA + PVA (QSRV) server.
 //!
 //! Usage:
 //!   cargo run -p spec-ioc -- st.cmd
@@ -14,7 +14,7 @@ use epics_rs::base::server::device_support::DeviceSupport;
 use epics_rs::ca::server::ioc_app::{DeviceSupportContext, IocApplication};
 use epics_rs::scaler::device_support::scaler_asyn::{ASYN_SCALER_DEVICE, ScalerAsynDeviceSupport};
 
-use spec_driver::ioc::{ScalerSlot, spec_create_command};
+use spec_driver::ioc::{ScalerSlot, spec_commands};
 
 #[epics_rs::base::epics_main]
 async fn main() -> CaResult<()> {
@@ -60,7 +60,9 @@ async fn main() -> CaResult<()> {
     app = epics_rs::asyn::adapter::register_asyn_device_support(app);
 
     let scaler: ScalerSlot = Arc::new(Mutex::new(None));
-    app = app.register_startup_command(spec_create_command(scaler.clone()));
+    for cmd in spec_commands(scaler.clone()) {
+        app = app.register_startup_command(cmd);
+    }
     app = app.register_dynamic_device_support(
         &epics_rs::motor::devices::devices(),
         epics_rs::motor::devices::device_support_factory(),

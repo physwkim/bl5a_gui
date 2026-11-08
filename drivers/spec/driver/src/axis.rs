@@ -31,9 +31,13 @@ impl SpecAxis {
         &self.shared.axes[self.index]
     }
 
-    /// `accept` on this axis when SPEC can take a move; a refusal is logged
-    /// and fails the record's request.
-    fn submit(&self, what: &str, accept: impl FnOnce(&mut Live) -> Op) -> AsynResult<()> {
+    /// `accept` on this axis when SPEC can take a move; a refusal, by
+    /// `accept` too, is logged and fails the record's request.
+    fn submit(
+        &self,
+        what: &str,
+        accept: impl FnOnce(&mut Live) -> Result<Op, String>,
+    ) -> AsynResult<()> {
         let index = self.index;
         let result = self.shared.submit(|live| {
             if let Some(why) = live.busy() {
@@ -42,7 +46,7 @@ impl SpecAxis {
             if live.axes[index].motion != Motion::Idle {
                 return Err("it is moving".into());
             }
-            Ok(accept(live))
+            accept(live)
         });
         result.map_err(|why| {
             let line = format!("{} {what} refused: {why}", self.mne());
@@ -64,8 +68,12 @@ impl AsynMotor for SpecAxis {
         velocity: f64,
         _acceleration: f64,
     ) -> AsynResult<()> {
-        let index = self.index;
+        let (index, shared) = (self.index, &self.shared);
         self.submit("move", |live| {
+            let target = position / live.axes[index].steps;
+            if let Some(why) = shared.refuse(&live.axes, index, target) {
+                return Err(why);
+            }
             live.queued += 1;
             let a = &mut live.axes[index];
             let slew = changed(velocity, a.slew);
@@ -73,13 +81,13 @@ impl AsynMotor for SpecAxis {
             a.slew = slew.unwrap_or(a.slew);
             a.base = base.unwrap_or(a.base);
             a.up = position > a.position * a.steps;
-            a.motion = Motion::Starting;
-            Op::Move {
+            a.motion = Motion::Starting { target };
+            Ok(Op::Move {
                 axis: index,
-                user: position / a.steps,
+                user: target,
                 slew,
                 base,
-            }
+            })
         })?;
         self.shared.wake(index);
         Ok(())
@@ -147,10 +155,10 @@ impl AsynMotor for SpecAxis {
         let index = self.index;
         self.submit("set", |live| {
             live.queued += 1;
-            Op::SetPosition {
+            Ok(Op::SetPosition {
                 axis: index,
                 user: position / live.axes[index].steps,
-            }
+            })
         })
     }
 

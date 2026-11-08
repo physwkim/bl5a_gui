@@ -105,12 +105,21 @@ is moving.
 The queue's own **Stop** is different: it lets the running item finish
 and then stops the queue.
 
+The mar345's motors (`martran marz marsdd marshut marx ipbsx ipbsy`)
+move only with tth at 40 or above, and tth goes below 40 only with
+martran at 1200 or above. A move from the GUI or a plan that would break
+this is refused and the SPEC log says why, for example `marz move
+refused: tth 1 is below 40`. SPEC's own moves (a macro, a command)
+cannot be refused: once one breaks the rule, spec-ioc sends SPEC a ^C,
+which stops every motor, and logs `interlock: …; sent ^C`. tth then
+stops a little below 40; move tth up before moving the mar.
+
 ## Motors
 
 ![The motors panel](img/motors.png)
 
-One row per spec-ioc motor: `sy shold th tth nu sx phi scell martran
-marsdd marshut`.
+One row per motor the plans move: `sy shold th tth nu sx phi scell
+martran marsdd marshut`.
 
 - **position** is the readback, with the record's precision and unit.
 - An orange dot after it means the motor is moving.

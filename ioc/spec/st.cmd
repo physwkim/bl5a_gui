@@ -17,7 +17,13 @@ epicsEnvSet("EPICS_DB_INCLUDE_PATH", "$(MOTOR)/db:$(SPEC_IOC)/db")
 # monitor (PR2 = monitor preset).
 # The 20 ms moving poll matches bl5a-sim's event tick, so a fly scan's
 # RBV lags the counts by at most one tick.
-SpecCreate("$(PORT)", "$(SPEC)", "$(MPORT)", "sy shold th tth nu scell martran marsdd marshut sx phi", "sec icxrd det ic1", 20, 500)
+# The mar345 hits the tth arm when it moves with tth low (mymar_in lifts
+# tth to 45 before it moves the mar in, align_in moves it out below
+# martran 1200): the mar's motors move only with tth >= 40, and tth goes
+# below 40 only with martran >= 1200. A motor record's move that breaks
+# it is refused; a SPEC move that breaks it is stopped with ^C.
+SpecInterlock("$(PORT)", "tth", 40, "martran", 1200, "martran marz marsdd marshut marx ipbsx ipbsy")
+SpecCreate("$(PORT)", "$(SPEC)", "$(MPORT)", "sy shold th tth nu scell martran marsdd marshut sx phi marz marx ipbsx ipbsy", "sec icxrd det ic1", 20, 500)
 
 dbLoadRecords("$(SPEC_IOC)/db/spec.db", "P=$(P),PORT=$(PORT)")
 dbLoadTemplate("db/bl5a.substitutions", "P=$(P),PORT=$(MPORT),SPORT=$(PORT)")

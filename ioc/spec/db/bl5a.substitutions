@@ -17,6 +17,10 @@ pattern
 {marshut, 8,    "MAR_Shutter", "", 4,   0.0012594458438287153, "asynMotor", Pos, 0,    0,    0.2,  0,    0,    0.2,  0,    0,    "",   0}
 {sx,      9,    "512X",      "",  4,    0.002,                 "asynMotor", Pos, 0,    0,    0.2,  0,    0,    0.2,  0,    0,    "",   0}
 {phi,     10,   "Phi",       deg, 4,    0.0001,                "asynMotor", Pos, 0,    0,    0.2,  0,    0,    0.2,  0,    0,    "",   0}
+{marz,    11,   "MAR_Ht",    "",  4,    4.1666666666666665e-05, "asynMotor", Pos, 0,   0,    0.2,  0,    0,    0.2,  0,    0,    "",   0}
+{marx,    12,   "MAR_X",     "",  4,    0.0005,                "asynMotor", Pos, 0,    0,    0.2,  0,    0,    0.2,  0,    0,    "",   0}
+{ipbsx,   13,   "MAR_BSx",   "",  4,    0.0005,                "asynMotor", Pos, 0,    0,    0.2,  0,    0,    0.2,  0,    0,    "",   0}
+{ipbsy,   14,   "MAR_BSy",   "",  4,    0.0005,                "asynMotor", Pos, 0,    0,    0.2,  0,    0,    0.2,  0,    0,    "",   0}
 }
 
 file "spec_live.db"

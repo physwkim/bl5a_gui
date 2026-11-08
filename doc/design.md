@@ -201,7 +201,19 @@ SPEC 데이터 파일은 흉내 내지 않으므로 `#Temp:` 줄과 loopscan 점
   되므로 kappa 의사모터 th도 같은 길로 움직인다. 여러 축을 한 번에 옮기는
   매크로의 `A[...]=…; move_all`은 `prestart_all` → `start_one`… →
   `start_all`이다. 축은 두 흐름이 움직이는 sy, shold, th, tth, nu, scell,
-  martran, marsdd, marshut만 둔다.
+  martran, marsdd, marshut과, 인터락이 지켜보는 marz, marx, ipbsx, ipbsy만
+  둔다.
+- **충돌 인터락**: mar345는 tth가 낮을 때 움직이면 tth 암에 부딪힌다.
+  `SpecInterlock("spec", "tth", 40, "martran", 1200, "martran marz marsdd
+  marshut marx ipbsx ipbsy")`: mar 모터는 tth ≥ 40이고 tth가 40 아래로
+  가는 중이 아닐 때만 움직이고, tth는 martran ≥ 1200이고 mar 모터가 멈춰
+  있을 때만 40 아래로 간다. 기준은 매크로에서 왔다(mymar_in은 tth < 40이면
+  45로 올린 뒤 tth 81과 함께 martran 25로 넣고, tth 42와 함께 1234로 뺀 뒤
+  tth 1로 내리고, align_in은 martran < 1200이면 `mar_ip_mode off`를
+  부른다). motor 레코드의 이동은 상태 락 아래에서 거절한다(qs의 `umv tth 81 martran 25`는 tth 이동을 먼저 보내므로 목표가
+  40 이상인 tth 이동 중의 mar 이동은 통과한다). SPEC 자신의 이동은 거절할
+  수 없으므로, 이벤트로 깨진 것을 보면 ^C를 한 번 보낸다(관련 축이 모두
+  멈추면 다시 무장). SPEC `mar_ip`의 tth < 80 가드는 그대로 SPEC에 있다.
   `set_position` → SV_CMD `set <mne> <pos>`, stop → speca처럼
   `abort_all`. 같은 위치 이동 때의 DMOV 펄스는 motor 레코드가 처리하므로
   speca의 `motor_put` 토글은 옮기지 않는다. 속도는 `slew_rate`·`base_rate`

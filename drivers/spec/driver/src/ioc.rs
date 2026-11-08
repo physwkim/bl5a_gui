@@ -3,7 +3,13 @@
 //! `port`, the command port `<port>_CMD`, a motor port `motorPort` with one
 //! axis per motor mnemonic, and the scaler the IOC binds to the record
 //! with DTYP "Asyn Scaler".
+//!
+//! `SpecInterlock(port, arm, clear, out, away, guarded)`, before
+//! SpecCreate of the same `port`: the guarded motors move only while
+//! `arm` is at or above `clear`, and `arm` goes below it only while `out`
+//! is at or above `away` (see [`crate::interlock`]).
 
+use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 
 use epics_rs::asyn::interfaces::motor::AsynMotor;
@@ -14,17 +20,28 @@ use epics_rs::asyn::runtime::config::RuntimeConfig;
 use epics_rs::asyn::runtime::port::{PortRuntimeHandle, create_port_runtime_boxed};
 use epics_rs::base::server::iocsh::registry::*;
 
-use motor_common::iocsh::{arg_int_opt, arg_str_req, poll_intervals, req_string};
+use motor_common::iocsh::{
+    arg_double_req, arg_int_opt, arg_str_req, poll_intervals, req_double, req_string,
+};
 use motor_common::{Controller, asyn_user, register_port};
 
 use crate::Shared;
 use crate::axis::SpecAxis;
+use crate::interlock::Named;
 use crate::port::{CmdPort, StatusPort};
 use crate::scaler::SpecScaler;
 use crate::session::Session;
 
 /// Where `SpecCreate` leaves the scaler for the record's device support.
 pub type ScalerSlot = Arc<Mutex<Option<SpecScaler>>>;
+
+/// What the startup commands pass between them, by port.
+#[derive(Default)]
+struct Ports {
+    /// SpecInterlock's, for SpecCreate to take.
+    interlocks: HashMap<String, Named>,
+    created: HashSet<String>,
+}
 
 /// Mnemonics separated by spaces or commas.
 fn mnemonics(list: &str) -> Vec<String> {
@@ -53,7 +70,54 @@ fn start_port(
     Ok(handle)
 }
 
-pub fn spec_create_command(scaler: ScalerSlot) -> CommandDef {
+/// `SpecInterlock` and `SpecCreate`.
+pub fn spec_commands(scaler: ScalerSlot) -> Vec<CommandDef> {
+    let ports: Arc<Mutex<Ports>> = Arc::default();
+    vec![
+        spec_interlock_command(ports.clone()),
+        spec_create_command(ports, scaler),
+    ]
+}
+
+fn spec_interlock_command(ports: Arc<Mutex<Ports>>) -> CommandDef {
+    CommandDef::new(
+        "SpecInterlock",
+        vec![
+            arg_str_req("Port name"),
+            arg_str_req("Arm motor"),
+            arg_double_req("Arm clear position"),
+            arg_str_req("Out motor"),
+            arg_double_req("Out away position"),
+            arg_str_req("Guarded motors"),
+        ],
+        "SpecInterlock(port, arm, clear, out, away, \"guarded\"), before SpecCreate(port, ...): \
+         the guarded motors move only with arm >= clear, and arm goes below clear only \
+         with out >= away",
+        move |args: &[ArgValue], _ctx: &CommandContext| {
+            let port = req_string(args, 0, "Port name")?;
+            let named = Named {
+                arm: req_string(args, 1, "Arm motor")?,
+                clear: req_double(args, 2, "Arm clear position")?,
+                out: req_string(args, 3, "Out motor")?,
+                away: req_double(args, 4, "Out away position")?,
+                guarded: mnemonics(&req_string(args, 5, "Guarded motors")?),
+            };
+            let mut ports = ports.lock().unwrap();
+            if ports.created.contains(&port) {
+                return Err(format!(
+                    "SpecInterlock: SpecCreate(\"{port}\") has run; SpecInterlock goes before it"
+                ));
+            }
+            if ports.interlocks.contains_key(&port) {
+                return Err(format!("SpecInterlock: {port} has one already"));
+            }
+            ports.interlocks.insert(port, named);
+            Ok(CommandOutcome::Continue)
+        },
+    )
+}
+
+fn spec_create_command(ports: Arc<Mutex<Ports>>, scaler: ScalerSlot) -> CommandDef {
     let runtimes: Arc<Mutex<Vec<PortRuntimeHandle>>> = Arc::default();
     CommandDef::new(
         "SpecCreate",
@@ -78,8 +142,17 @@ pub fn spec_create_command(scaler: ScalerSlot) -> CommandDef {
             if channels.is_empty() {
                 return Err("SpecCreate: no counters; the first is the timer".into());
             }
+            let interlock = {
+                let mut ports = ports.lock().unwrap();
+                ports.created.insert(port.clone());
+                ports.interlocks.remove(&port)
+            };
+            let interlock = interlock
+                .map(|named| named.resolve(&axes))
+                .transpose()
+                .map_err(|why| format!("SpecInterlock({port}): {why}"))?;
             let n = axes.len();
-            let (shared, requests) = Shared::new(axes, channels);
+            let (shared, requests) = Shared::new(axes, channels, interlock);
             let shared = Arc::new(shared);
 
             let status = StatusPort::new(&port, shared.clone()).map_err(|e| e.to_string())?;

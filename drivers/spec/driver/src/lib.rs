@@ -15,6 +15,7 @@
 //! a count SPEC refused.
 
 mod axis;
+mod interlock;
 pub mod ioc;
 mod log;
 mod points;
@@ -33,6 +34,8 @@ use epics_rs::base::runtime::sync::mpsc;
 use epics_rs::motor::poll_loop::PollCommand;
 use epics_rs::scaler::device_support::scaler_asyn::DoneParam;
 
+use interlock::Interlock;
+
 /// The scaler's clock: the first channel is SPEC's timer, in seconds, and
 /// the record counts it in ticks of this rate.
 pub const TIMER_FREQ: f64 = 1e7;
@@ -46,6 +49,7 @@ pub(crate) struct Shared {
     pub(crate) axes: Vec<String>,
     /// Counter mnemonics; the first is the timer, the second the monitor.
     pub(crate) channels: Vec<String>,
+    pub(crate) interlock: Option<Interlock>,
 }
 
 pub(crate) struct State {
@@ -78,6 +82,8 @@ pub(crate) struct Live {
     pub(crate) queued: usize,
     pub(crate) axes: Vec<AxisLive>,
     pub(crate) count: Count,
+    /// The ^C for the interlock's axes under way now has been sent.
+    pub(crate) tripped: bool,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -98,16 +104,35 @@ pub(crate) struct AxisLive {
     pub(crate) up: bool,
 }
 
-/// A motor's motion as the session has seen it.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+/// A motor's motion as the session has seen it. `target`, in user units,
+/// is where a motor record sent it; SPEC's own moves have none.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub(crate) enum Motion {
     #[default]
     Idle,
     /// `start_one` sent; neither `move_done` = 1 nor the barrier yet.
-    Starting,
-    Moving,
+    Starting {
+        target: f64,
+    },
+    Moving {
+        target: Option<f64>,
+    },
     /// Stopped; the final position is being read.
     Settling,
+}
+
+impl Motion {
+    pub(crate) fn moving(self) -> bool {
+        matches!(self, Motion::Starting { .. } | Motion::Moving { .. })
+    }
+
+    pub(crate) fn target(self) -> Option<f64> {
+        match self {
+            Motion::Starting { target } => Some(target),
+            Motion::Moving { target } => target,
+            Motion::Idle | Motion::Settling => None,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -131,6 +156,7 @@ impl Live {
             queued: 0,
             axes: vec![AxisLive::default(); axes],
             count: Count::Idle,
+            tripped: false,
         }
     }
 
@@ -190,6 +216,7 @@ impl Shared {
     pub(crate) fn new(
         axes: Vec<String>,
         channels: Vec<String>,
+        interlock: Option<Interlock>,
     ) -> (Shared, mpsc::UnboundedReceiver<Request>) {
         let (requests, rx) = mpsc::unbounded_channel();
         let n = channels.len();
@@ -204,6 +231,7 @@ impl Shared {
             done: DoneParam::new(1),
             axes,
             channels,
+            interlock,
         };
         (shared, rx)
     }
@@ -232,6 +260,14 @@ impl Shared {
 
     pub(crate) fn log(&self, line: String) {
         let _ = self.requests.send(Request::Log(line));
+    }
+
+    /// Why the interlock refuses a motor record's move of `axis` to
+    /// `target` (user units) now.
+    pub(crate) fn refuse(&self, axes: &[AxisLive], axis: usize, target: f64) -> Option<String> {
+        self.interlock
+            .as_ref()?
+            .refuse(&self.axes, axes, axis, target)
     }
 
     pub(crate) fn wake(&self, axis: usize) {

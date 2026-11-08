@@ -150,6 +150,8 @@ struct Effects {
     done: bool,
     /// A command replied without an error: its next read.
     closing: Option<Closing>,
+    /// SPEC's own moves broke the interlock: why, for the ^C sent first.
+    abort: Option<String>,
 }
 
 enum Post {
@@ -565,7 +567,7 @@ impl Session {
                 let what = match b {
                     // A move or count that never started: settle it now.
                     Barrier::Move(i) => {
-                        if live.axes[i].motion == Motion::Starting {
+                        if matches!(live.axes[i].motion, Motion::Starting { .. }) {
                             fx.reads.push(Prop::MoveDone(i));
                         }
                         format!("{} move", self.shared.axes[i])
@@ -598,6 +600,10 @@ impl Session {
         let number = p.number();
         let value =
             || number.ok_or_else(|| format!("{}: not a number: {:?}", self.name(prop), p.text()));
+        let fell = match prop {
+            Prop::Position(i) => number.is_some_and(|v| v < live.axes[i].position),
+            _ => false,
+        };
         let result = match prop {
             Prop::Position(i) => value().map(|v| {
                 let a = &mut live.axes[i];
@@ -610,9 +616,11 @@ impl Session {
             Prop::MoveDone(i) => value().map(|v| {
                 let a = &mut live.axes[i];
                 if v != 0.0 {
-                    a.motion = Motion::Moving;
+                    a.motion = Motion::Moving {
+                        target: a.motion.target(),
+                    };
                     fx.wake.push(i);
-                } else if matches!(a.motion, Motion::Starting | Motion::Moving) {
+                } else if a.motion.moving() {
                     a.motion = Motion::Settling;
                     fx.reads.push(Prop::Position(i));
                 }
@@ -692,6 +700,13 @@ impl Session {
         };
         if let Err(why) = result {
             fx.log(why);
+        }
+        if let (true, Some(lock), Prop::Position(axis) | Prop::MoveDone(axis)) =
+            (up, &self.shared.interlock, prop)
+            && let Some(why) =
+                lock.watch(&self.shared.axes, &live.axes, &mut live.tripped, axis, fell)
+        {
+            fx.abort = Some(why);
         }
     }
 
@@ -812,6 +827,10 @@ impl Session {
     }
 
     async fn flush(&mut self, conn: &mut Conn, fx: Effects) -> Result<(), String> {
+        if let Some(why) = fx.abort {
+            conn.send(Packet::new(Cmd::Abort, 0, ""), None).await?;
+            self.log(format!("interlock: {why}; sent ^C")).await;
+        }
         if fx.done {
             self.shared.done.call_callbacks();
         }
