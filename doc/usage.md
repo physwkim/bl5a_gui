@@ -39,7 +39,7 @@ the integrator, so it shows every stack it holds.
 
 | Area | What is in it |
 | --- | --- |
-| Top | the run buttons (Pause, Resume, Stop, Abort) and the status line |
+| Top | the run buttons (Pause, Resume, Stop, Abort, Stop all) and the status line |
 | Left | motors, the Data and Integration boxes, the Alignment box, the Battery and In-situ forms |
 | Centre | the Scan, Image and Stack tabs |
 | Right | the queue, the stages of the running alignment, the alignment history |
@@ -89,9 +89,16 @@ The QS dot is green when idle, orange when paused and blue otherwise.
 | Resume | paused | goes on |
 | Stop | a plan runs or is paused | ends the plan, recorded as a success |
 | Abort | a plan runs or is paused | asks first, then ends the plan, recorded as aborted |
+| Stop all (red) | always | does not ask: sends SPEC ^C, which stops every motor SPEC moves, a count and SPEC's command, and aborts the plan if one runs or is paused |
 
 However a plan ends, bl5a-qs then interrupts a SPEC command still
 running, stops a count still running and closes the mar345 shutter.
+
+**Stop all** is for when something goes wrong: a motor heading the wrong
+way, a macro run from SPEC's own terminal, a plan doing what it should
+not. The ^C reaches SPEC through spec-ioc whatever qs is doing, so it
+works with qs stopped too. If spec-ioc is not connected, a warning says
+SPEC got no ^C; stop the motors at SPEC's own terminal then.
 
 The plans do not replay a SPEC macro that was cut in half. After
 **Pause**, **Resume** fails the plan with "plan interrupted: a paused

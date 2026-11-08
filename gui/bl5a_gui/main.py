@@ -16,6 +16,9 @@ from .panels import AlignBox, DataBox, IntegrationBox, MotorsPanel, StatusBar
 from .plots import ImageTab, ScanTab, StackTab
 from .tables import HistoryTable, QueueTable, StagesTable
 
+# SPEC's ^C: it stops every motor SPEC moves, a count and the command.
+STOP_ALL = config.SPEC + "Cmd:Abort"
+
 
 def _titled(title, widget):
     box = qt.QGroupBox(title)
@@ -121,6 +124,14 @@ class MainWindow(qt.QMainWindow):
         self.resumeAct.triggered.connect(lambda: self.run("resume", self.RE.resume))
         self.stopAct.triggered.connect(lambda: self.run("stop", self.RE.stop))
         self.abortAct.triggered.connect(self._abort)
+        bar.addSeparator()
+        self.stopAll = qt.QPushButton("Stop all")
+        self.stopAll.setStyleSheet("QPushButton { background: #c62828; color: white; font-weight: bold;"
+                                   " padding: 2px 14px; }")
+        self.stopAll.setToolTip("SPEC's ^C ({}): stops every motor, count and command SPEC runs, and aborts "
+                                "the running or paused plan. Always live; does not ask.".format(STOP_ALL))
+        bar.addWidget(self.stopAll)
+        self.stopAll.clicked.connect(self._stopAll)
 
         # -- documents -------------------------------------------------
         self.docs = docs.Documents(
@@ -164,6 +175,7 @@ class MainWindow(qt.QMainWindow):
 
         for suffix in gate.SPEC_STATE:
             self.pvs.watch(config.SPEC + suffix)
+        self.pvs.watch(STOP_ALL)
         for name in (config.RING_PV, config.SHUTTER_PV, config.MAR + "DetectorState_RBV"):
             self.pvs.watch(name)
         temps = (config.TEMP_SP_PV, config.TEMP_RBV_PV, config.TEMP_RAMP_PV)
@@ -198,9 +210,28 @@ class MainWindow(qt.QMainWindow):
         answer = qt.QMessageBox.question(self, "Abort", "Abort the running plan?",
                                          qt.QMessageBox.Yes | qt.QMessageBox.No, qt.QMessageBox.No)
         if answer == qt.QMessageBox.Yes:
-            self.afterFrame.asked = False
-            self._show()
-            self.run("abort", self.RE.abort)
+            self._abortPlan()
+
+    def _abortPlan(self):
+        self.afterFrame.asked = False
+        self._show()
+        self.run("abort", self.RE.abort)
+
+    def _stopAll(self):
+        """SPEC's ^C whatever state qs and SPEC are in, and the plan
+        aborted so it moves nothing after it; qs then stops what the plan
+        still moves."""
+        sent = self.pvs.watch(STOP_ALL).connected
+        if sent:
+            self.pvs.put(STOP_ALL, 1)
+        if gate.allowed(self.qs, self.spec, self.afterFrame.asked)["abort"]:
+            self._abortPlan()
+        if sent:
+            self.messages.add("Stop all: sent SPEC ^C")
+        else:
+            self.messages.add("Stop all: {} is not connected, SPEC got no ^C".format(STOP_ALL))
+            qt.QMessageBox.warning(self, "Stop all", "{} is not connected: SPEC got no ^C. Stop the motors "
+                                   "at SPEC's own terminal.".format(STOP_ALL))
 
     def _stopAfterFrame(self):
         self.afterFrame.asked = True
