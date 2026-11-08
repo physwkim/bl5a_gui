@@ -16,10 +16,11 @@ pub enum Pick {
     Com,
     /// `pl_xMAX` of a peak.
     XMax,
-    /// The half-maximum crossing of an edge, where a half-cut scan's
-    /// sample takes half the beam. The macros' `CEN` lies halfway between
-    /// it and the maximum, which on the unblocked plateau is wherever the
-    /// noise puts it.
+    /// Where a half-cut scan's sample takes half the beam: the crossing
+    /// halfway between the maximum and the floor under the blocked beam,
+    /// on the one side the scan falls below half its maximum. The macros'
+    /// `CEN` lies halfway between the crossing and the maximum, which on
+    /// the unblocked plateau is wherever the noise puts it.
     Edge,
 }
 
@@ -61,6 +62,10 @@ const MIN_SNR: f64 = 5.0;
 /// A peak's bins fall below its largest, on each side, by more than
 /// this many σ of a difference of two bins.
 const MIN_FALL: f64 = 3.0;
+/// A scan shows its floor when this many bins lie within `MIN_FALL` σ
+/// of the lowest: a fine scan that ends on the edge's slope has its
+/// minimum at an end point, above the floor.
+const FLOOR_BINS: usize = 3;
 /// σ per median absolute deviation, for normal noise.
 const MAD_SIGMA: f64 = 1.4826;
 
@@ -167,6 +172,39 @@ impl Bins {
         }
         Ok(())
     }
+
+    /// The scan levels off at its minimum: `FLOOR_BINS` bins within
+    /// `MIN_FALL` σ of a difference of two bins of the lowest.
+    fn settles(&self) -> bool {
+        let low = self.means.iter().copied().fold(f64::INFINITY, f64::min);
+        let least = MIN_FALL * std::f64::consts::SQRT_2 * self.sigma;
+        self.means.iter().filter(|&&m| m - low <= least).count() >= FLOOR_BINS
+    }
+}
+
+/// The edge of a half-cut scan, which falls below half its maximum on
+/// one side. The floor is its minimum where it levels off there, and
+/// zero, the fully blocked beam, where the scan ends on the slope.
+fn edge(x: &[f64], y: &[f64], bins: &Bins) -> Result<f64, String> {
+    let dir = match (half(x, y, -1), half(x, y, 1)) {
+        (Some(_), None) => -1,
+        (None, Some(_)) => 1,
+        (None, None) => {
+            return Err("the scan never falls to half its maximum: no edge in the range".into());
+        }
+        (Some(_), Some(_)) => {
+            return Err(
+                "the scan falls to half its maximum on both sides: a peak, not an edge".into(),
+            );
+        }
+    };
+    let floor = if bins.settles() {
+        y.iter().copied().fold(f64::INFINITY, f64::min)
+    } else {
+        0.0
+    };
+    let above: Vec<f64> = y.iter().map(|v| v - floor).collect();
+    half(x, &above, dir).ok_or_else(|| format!("the scan never falls halfway to its floor {floor}"))
 }
 
 /// The scan's statistics and `pick`'s target, or why it has none.
@@ -197,19 +235,7 @@ pub fn screen(x: &[f64], y: &[f64], pick: Pick) -> Result<Screened, String> {
         Pick::Cen => stats.cen,
         Pick::Com => stats.com,
         Pick::XMax => stats.xpk,
-        Pick::Edge => match (half(x, &y, -1), half(x, &y, 1)) {
-            (Some(v), None) | (None, Some(v)) => v,
-            (None, None) => {
-                return Err(
-                    "the scan never falls to half its maximum: no edge in the range".into(),
-                );
-            }
-            (Some(_), Some(_)) => {
-                return Err(
-                    "the scan falls to half its maximum on both sides: a peak, not an edge".into(),
-                );
-            }
-        },
+        Pick::Edge => edge(x, &y, &bins)?,
     };
     if !target.is_finite() {
         return Err(format!("{} is {target}", pick.name()));
@@ -328,6 +354,30 @@ mod tests {
         let x = grid(0.0, 1.0, 101);
         let y = edge(&x, 0.5, 750.0);
         assert!(fails(&x, &y, Pick::Edge).starts_with("the scan never falls to half"));
+    }
+
+    /// Halfway to a floor of 300 is at 650, where the edge is; half the
+    /// maximum, 500, is 0.018 past it.
+    #[test]
+    fn edge_over_a_floor_is_halfway_to_it() {
+        let x = grid(0.0, 1.0, 101);
+        let falling = edge(&x, 0.437, 300.0);
+        // The same edge with the beam unblocked at the far end.
+        let rising: Vec<f64> = edge(&x, 1.0 - 0.437, 300.0).into_iter().rev().collect();
+        for y in [falling, rising] {
+            let t = screen(&x, &y, Pick::Edge).unwrap().target;
+            assert!((t - 0.437).abs() < 0.005, "{t}");
+        }
+    }
+
+    /// A fine scan that ends on the slope at 400: its minimum is no
+    /// floor, and the edge is where it falls to half its maximum.
+    #[test]
+    fn edge_without_its_floor_is_at_half_the_maximum() {
+        let x = grid(0.0, 1.0, 101);
+        let y = counts(&x, |x| 1000.0 - 600.0 * ((x - 0.3) / 0.7).max(0.0));
+        let t = screen(&x, &y, Pick::Edge).unwrap().target;
+        assert!((t - (0.3 + 0.7 * 5.0 / 6.0)).abs() < 0.03, "{t}");
     }
 
     #[test]

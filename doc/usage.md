@@ -414,8 +414,12 @@ and, where a value is given, redefines that position with `set`.
 
 It ends with `mar345closeshutter` and an erase of the plate.
 
-EDGE is where a shold scan falls through half its maximum, the height at
-which the sample takes half the beam. `align_in.mac` moves to CEN, which
+EDGE is where a shold scan falls through halfway between its maximum
+and its floor, the height at which the sample takes half the beam. The
+floor is the scan's minimum when at least 3 of the 25 bins lie within 3
+times the noise of a difference of two bins of the lowest; a scan that
+ends on the slope shows no floor, and it is taken as zero. `align_in.mac`
+moves to CEN, which
 for an edge lies halfway between that point and the maximum, and on the
 open-beam plateau the maximum is wherever the noise puts it: over four
 scans of one edge on the beamline CEN moved by 0.24 while the half point
@@ -443,7 +447,8 @@ ends the plan, which fails with the reason Messages shows, when
   may lie past the end, with the end point's noise putting it below the
   one before;
 - an edge never falls to half its maximum, or falls to half on both
-  sides.
+  sides. A step that does not fall to half, such as a sample that takes
+  a fifth of the beam, is not taken for an edge over a high floor.
 
 A peak that never falls to half inside the scan, such as a rocking curve
 wider than a th scan, still goes to CEN, which is then the maximum.
