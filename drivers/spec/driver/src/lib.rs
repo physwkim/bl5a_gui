@@ -110,6 +110,9 @@ pub(crate) struct AxisLive {
 pub(crate) enum Motion {
     #[default]
     Idle,
+    /// Idle, the motor record's last request refused: its record shows a
+    /// problem until the motor moves or a request is accepted.
+    Refused,
     /// `start_one` sent; neither `move_done` = 1 nor the barrier yet.
     Starting {
         target: f64,
@@ -122,6 +125,11 @@ pub(crate) enum Motion {
 }
 
 impl Motion {
+    /// Nothing under way: a motor record's request may go.
+    pub(crate) fn idle(self) -> bool {
+        matches!(self, Motion::Idle | Motion::Refused)
+    }
+
     pub(crate) fn moving(self) -> bool {
         matches!(self, Motion::Starting { .. } | Motion::Moving { .. })
     }
@@ -130,7 +138,7 @@ impl Motion {
         match self {
             Motion::Starting { target } => Some(target),
             Motion::Moving { target } => target,
-            Motion::Idle | Motion::Settling => None,
+            Motion::Idle | Motion::Refused | Motion::Settling => None,
         }
     }
 }
