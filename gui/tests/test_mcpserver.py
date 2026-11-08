@@ -1,10 +1,11 @@
 import math
+import types
 
 import anyio
 import numpy as np
 import pytest
 
-from bl5a_gui import items, mcpserver, sequences
+from bl5a_gui import config, items, mcpserver, sequences
 from bl5a_gui.mcpserver import InsituRow, Log, binned, clean
 
 
@@ -86,7 +87,7 @@ def test_tools_and_their_arguments():
         "save_alignment_sequence", "queue_alignment", "queue_mar_series",
         "queue_insitu", "queue_remove", "queue_move", "queue_clear", "queue_start", "queue_stop",
         "queue_autostart", "environment_open", "environment_close", "pause", "resume", "stop", "abort",
-        "stop_after_frame", "tweak", "spec_command", "spec_abort", "integration_set"}
+        "stop_after_frame", "tweak", "spec_command", "spec_abort", "stop_all", "integration_set"}
     mar = tools["queue_mar_series"].input_schema
     assert set(mar["required"]) == {"name", "texpo", "beamstop_in_place"}
     assert tools["queue_alignment"].input_schema["required"] == ["sequence"]
@@ -96,3 +97,50 @@ def test_tools_and_their_arguments():
     assert set(tools["messages"].input_schema["properties"]) == {"since", "limit"}
     assert tools["status"].annotations.read_only_hint
     assert tools["abort"].annotations.destructive_hint
+    assert tools["stop_all"].annotations.destructive_hint
+
+
+class AbortPV:
+    def __init__(self, connected):
+        self.connected, self.puts = connected, []
+
+    def put(self, value, wait):
+        self.puts.append(value)
+        return 1
+
+
+def stop_all(monkeypatch, qs, connected=True):
+    """Beamline.stop_all with SPEC free and qs reporting `qs`."""
+    monkeypatch.setattr(mcpserver.epics.ca, "use_initial_context", lambda: None)
+    bl = mcpserver.Beamline("tcp://127.0.0.1:1", "tcp://127.0.0.1:2", "tcp://127.0.0.1:3", "tcp://127.0.0.1:4",
+                            "test")
+    bl.sync = lambda: None
+    bl.qs = qs
+    bl.spec = {"Connected": "Connected", "Busy": "Ready", "Cmd:Busy": "Idle"}
+    bl.after_frame.asked = True
+    bl.pvs[config.SPEC + "Cmd:Abort"] = pv = AbortPV(connected)
+    aborts = []
+    bl.RE = types.SimpleNamespace(abort=lambda: aborts.append(1))
+    return bl, bl.stop_all(), pv.puts, aborts
+
+
+def test_stop_all_sends_spec_ctrl_c_whatever_qs_does(monkeypatch):
+    for qs in ({"re_state": "idle"}, None):
+        _, got, puts, aborts = stop_all(monkeypatch, qs)
+        assert got == {"spec": "^C sent", "plan": "none running or paused"}, qs
+        assert puts == [1] and aborts == [], qs
+
+
+def test_stop_all_aborts_a_running_or_paused_plan(monkeypatch):
+    for state in ("executing_queue", "paused"):
+        bl, got, puts, aborts = stop_all(monkeypatch, {"re_state": state, "running_item_name": "mar_series"})
+        assert got == {"spec": "^C sent", "plan": "abort requested"}, state
+        assert puts == [1] and aborts == [1], state
+        assert not bl.after_frame.asked, state
+
+
+def test_stop_all_without_cmd_abort_still_aborts_and_says_so(monkeypatch):
+    bl, got, puts, aborts = stop_all(monkeypatch, {"re_state": "executing_queue"}, connected=False)
+    assert puts == [] and aborts == [1]
+    assert "SPEC got no ^C" in got["spec"] and got["plan"] == "abort requested"
+    assert "SPEC got no ^C" in bl.messages.since(0, 10)["lines"][-1]

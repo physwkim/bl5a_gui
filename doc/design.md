@@ -538,7 +538,7 @@ Python Qt(silx.gui.qt + pyepics). bl7c `pal_tools`의 `bsrs_client.py`,
   답하기 전에는 `config.PONI`를 쓴다. mask, unit, 모드는 GUI에서 바꾸지
   않는다.
 - **MCP 서버**(`gui/run_mcp.py`, `bl5a_gui/mcpserver.py`): Claude Code나
-  Codex가 `deploy/bl5a-mcp`로 띄우며, GUI와 같은 일을 하도록 stdio MCP 도구 35개를 연다. 아이템은 폼과
+  Codex가 `deploy/bl5a-mcp`로 띄우며, GUI와 같은 일을 하도록 stdio MCP 도구 39개를 연다. 아이템은 폼과
   같은 `items.py`로 만들고, 버튼과 같은 `gate.py` 규칙으로 막고, GUI가 쓰는
   PV(모터 TWV/TWF/TWR, SPEC `Cmd`/`Cmd:Abort`)만 쓴다. qs 상태는 `sync()`
   하나가 읽고, 상태를 보거나 게이트를 거는 도구는 먼저 그것을 부른다.

@@ -398,7 +398,7 @@ args = ["--user", "codex"]
 tool_timeout_sec = 660
 ```
 
-Check it with `/mcp` in either client: `bl5a` connected, 35 tools.
+Check it with `/mcp` in either client: `bl5a` connected, 39 tools.
 
 ## 5. Starting and stopping
 

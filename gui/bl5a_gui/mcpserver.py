@@ -48,8 +48,10 @@ bl5a-integrator integrates each frame into its series' stack.
   nothing running, SPEC connected and idle.
 - messages, spec_log and commands are logs: pass `since` = the `last` the
   previous read returned.
-- Ask the operator before abort and queue_clear, and before queueing
-  frames: the shutter opens for them."""
+- stop_all is the GUI's red Stop all: SPEC's ^C for every motor, count
+  and command, and an abort of the plan.
+- Ask the operator before abort, stop_all and queue_clear, and before
+  queueing frames: the shutter opens for them."""
 
 # The qs status fields `status` reports.
 QS_KEYS = ("manager_state", "re_state", "worker_environment_exists", "items_in_queue", "items_in_history",
@@ -532,6 +534,33 @@ class Beamline:
             if r is None:
                 raise ToolError(config.SPEC + "Cmd:Abort: not connected")
         return {"aborting": c.cmd}
+
+    def stop_all(self):
+        """The GUI's Stop all: SPEC's ^C, whoever started what SPEC runs,
+        then an abort of the plan if one runs or is paused. The ^C goes
+        first: reading qs can take seconds."""
+        epics.ca.use_initial_context()
+        pv = self.pvs[config.SPEC + "Cmd:Abort"]
+        sent = pv.connected and pv.put(1, wait=False) is not None
+        self.sync()
+        with self.lock:
+            plan = gate.allowed(self.qs, self.spec, self.after_frame.asked)["abort"]
+            if plan:
+                self.after_frame.asked = False
+        if sent:
+            spec = "^C sent"
+        else:
+            spec = "{}Cmd:Abort is not connected: SPEC got no ^C; stop the motors at SPEC's own terminal".format(
+                config.SPEC)
+        self.messages.add("Stop all: " + ("sent SPEC ^C" if sent else spec))
+        result = {"spec": spec, "plan": "none running or paused"}
+        if plan:
+            try:
+                self.re(self.RE.abort)
+                result["plan"] = "abort requested"
+            except QsError as e:
+                result["plan"] = "abort failed: {}".format(e)
+        return result
 
     def tweak(self, motor, step, direction):
         if motor not in config.MOTORS:
@@ -1098,6 +1127,14 @@ def build(bl):
     def spec_abort():
         """Interrupt the SPEC command sent from here (^C); never a plan's."""
         return out(bl.spec_abort())
+
+    @tool(destructive=True)
+    def stop_all():
+        """Stop everything now, as the GUI's red Stop all: SPEC's ^C, which
+        stops every motor SPEC moves, a count and the command, whoever
+        started them; then an abort of the running or paused plan. Works in
+        every state. Ask the operator first, unless they asked to stop."""
+        return out(bl.stop_all())
 
     # -- integration -------------------------------------------------------
     @tool()

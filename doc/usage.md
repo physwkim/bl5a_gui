@@ -755,6 +755,7 @@ scan find?".
 | `pause`, `resume`, `stop`, `abort`, `stop_after_frame` | end or hold the running plan | Run buttons, Stop after frame |
 | `tweak` | move a motor by a step | Motors ◀ ▶ |
 | `spec_command`, `spec_result`, `spec_abort` | one SPEC command, its result, ^C | SPEC console |
+| `stop_all` | SPEC's ^C for every motor, count and command, and an abort of the plan | Stop all |
 | `integration_set` | a PONI file and npt for the next frames | Integration Apply |
 
 The rules are the GUI's:
@@ -767,7 +768,7 @@ The rules are the GUI's:
   `<folder>/<series>`.
 - `queue_mar_series` needs `beamstop_in_place: true`, the GUI's beamstop
   question. The server tells the AI to ask you first, and to ask before
-  `abort` and `queue_clear`. Your MCP client's permission prompt is the
+  `abort`, `stop_all` and `queue_clear`. Your MCP client's permission prompt is the
   other guard: allow only the read tools without a prompt.
 - `pause` then `resume` fails the plan, as in the GUI.
   `stop_after_frame` ends a series after the frame being taken; asked
