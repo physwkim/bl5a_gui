@@ -15,7 +15,7 @@ use bsrs::plans::preprocessors::{finalize_wrapper, msg_mutator, run_wrapper};
 use serde_json::json;
 
 use crate::ctx::{Ctx, Step, plan_fn};
-use crate::devices::{Axis, Count, Devices, Holder, Live, Scaler, SpecCmd, Table};
+use crate::devices::{Axis, Count, Devices, Holder, Live, Preset, Scaler, SpecCmd, Table};
 use crate::plans::run_md;
 use crate::screen::{Pick, Screened, screen};
 use crate::specfile::SPEC_HEAD;
@@ -27,11 +27,16 @@ const SETTLE: Duration = Duration::from_secs(30);
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Motion {
-    /// `intervals` steps; `settle` is the macros' `_sleep` before each
-    /// count.
-    Step { intervals: usize, settle: Duration },
-    /// SPEC's own cscan; `sleep` is its `_stime` between samples.
-    Fly { sleep: Duration },
+    /// `intervals` steps, each counted to `preset`; `settle` is the
+    /// macros' `_sleep` before each count.
+    Step {
+        intervals: usize,
+        settle: Duration,
+        preset: Preset,
+    },
+    /// SPEC's own cscan over `seconds`; `sleep` is its `_stime` between
+    /// samples.
+    Fly { seconds: f64, sleep: Duration },
 }
 
 pub struct Scan {
@@ -40,8 +45,6 @@ pub struct Scan {
     pub finish: f64,
     /// `start` and `finish` are offsets from where the motor is.
     pub relative: bool,
-    /// Seconds per point (step) or of the whole move (fly).
-    pub ctime: f64,
     pub motion: Motion,
     /// The counter the statistics are of, SPEC's `DET`.
     pub det: &'static str,
@@ -76,19 +79,34 @@ impl Scan {
         }
     }
 
+    /// SPEC's `_ctime`: seconds, or monitor counts as their negative.
+    fn ctime(&self) -> f64 {
+        match self.motion {
+            Motion::Step {
+                preset: Preset::Seconds(t),
+                ..
+            }
+            | Motion::Fly { seconds: t, .. } => t,
+            Motion::Step {
+                preset: Preset::Monitor(n),
+                ..
+            } => -n,
+        }
+    }
+
     /// The scan as the macros write it.
     pub fn command(&self) -> String {
         let (m, s, f, t) = (
             self.axis.name(),
             g(self.start),
             g(self.finish),
-            g(self.ctime),
+            g(self.ctime()),
         );
         match self.motion {
             Motion::Step { intervals, .. } => {
                 format!("{} {m} {s} {f} {intervals} {t}", self.name())
             }
-            Motion::Fly { sleep } => {
+            Motion::Fly { sleep, .. } => {
                 let st = g(sleep.as_secs_f64());
                 format!("{} {m} {s} {f} {t} {st}", self.name())
             }
@@ -99,7 +117,7 @@ impl Scan {
     /// `_cscan_prep`'s give the ends absolute, and `lup` runs as `ascan`,
     /// `clup` as `cscan`.
     fn heading(&self, s: f64, f: f64) -> String {
-        let (m, s, f, t) = (self.axis.name(), g(s), g(f), g(self.ctime));
+        let (m, s, f, t) = (self.axis.name(), g(s), g(f), g(self.ctime()));
         match self.motion {
             Motion::Step { intervals, .. } => format!("ascan  {m} {s} {f}  {intervals} {t}"),
             Motion::Fly { .. } => format!("cscan  {m} {s} {f}  {t}"),
@@ -124,11 +142,16 @@ impl Scan {
             };
             let md = scan.md(s, f);
             let (body, finalizer) = match scan.motion {
-                Motion::Step { intervals, settle } => {
+                Motion::Step {
+                    intervals,
+                    settle,
+                    preset,
+                } => {
                     let body = {
                         let (scan, scaler) = (scan.clone(), scaler.clone());
+                        let count = Arc::new(Count { scaler, preset });
                         plan_fn(move |ctx| async move {
-                            scan.step(&ctx, &scaler, (s, f), intervals, settle, &recorded)
+                            scan.step(&ctx, count, (s, f), intervals, settle, &recorded)
                                 .await
                         })
                     };
@@ -170,7 +193,6 @@ impl Scan {
             "motor": m,
             "start": self.start,
             "finish": self.finish,
-            "time": self.ctime,
         });
         let mut extra = json!({
             "motors": [m],
@@ -185,16 +207,27 @@ impl Scan {
         extra[SPEC_HEAD] = json!({
             "file": self.spec_file,
             "heading": self.heading(s, f),
-            "ctime": self.ctime,
+            "ctime": self.ctime(),
             "epoch": matches!(self.motion, Motion::Step { .. }),
         });
         match self.motion {
-            Motion::Step { intervals, settle } => {
+            Motion::Step {
+                intervals,
+                settle,
+                preset,
+            } => {
+                match preset {
+                    Preset::Seconds(t) => args["time"] = json!(t),
+                    Preset::Monitor(n) => args["monitor"] = json!(n),
+                }
                 args["intervals"] = json!(intervals);
                 args["settle"] = json!(settle.as_secs_f64());
                 extra["num_points"] = json!(intervals + 1);
             }
-            Motion::Fly { sleep } => args["sleep"] = json!(sleep.as_secs_f64()),
+            Motion::Fly { seconds, sleep } => {
+                args["time"] = json!(seconds);
+                args["sleep"] = json!(sleep.as_secs_f64());
+            }
         }
         extra["plan_args"] = args;
         run_md(self.name(), extra, HashMap::new())
@@ -204,7 +237,7 @@ impl Scan {
     async fn step(
         &self,
         ctx: &Ctx,
-        scaler: &Arc<Scaler>,
+        count: Arc<Count>,
         (s, f): (f64, f64),
         intervals: usize,
         settle: Duration,
@@ -214,10 +247,6 @@ impl Scan {
         let limits = check_limits(axis.clone(), s, f);
         ctx.call(limits).await?;
         let d = (f - s) / intervals as f64;
-        let count = Arc::new(Count {
-            scaler: scaler.clone(),
-            seconds: self.ctime,
-        });
         for i in 0..=intervals {
             ctx.mv(&[axis.to(s + i as f64 * d)]).await?;
             ctx.create("primary").await?;

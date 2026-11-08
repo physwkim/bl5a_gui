@@ -137,7 +137,8 @@ def text(b):
         if items.SCAN_TYPES[b["type"]]:
             how = "{} {}".format(_g(b["time"]), _g(b["sleep"]))
         else:
-            how = "{} {}".format(b["intervals"], _g(b["time"]))
+            # SPEC's count time: monitor counts as their negative.
+            how = "{} {}".format(b["intervals"], _g(-b["monitor"] if "monitor" in b else b["time"]))
         line = "{} {} {} {} {}  {} → {}".format(b["type"], b["motor"], _g(b["start"]), _g(b["finish"]), how,
                                                 b["counter"], b["pick"])
         if b.get("dip"):

@@ -22,6 +22,7 @@ use bsrs::qs::EnvironmentHook;
 use chrono::{DateTime, Local, TimeZone};
 use serde_json::Value;
 
+use crate::devices::MONITOR;
 use crate::scan::{g, g_digits};
 
 /// The start md of a run that is a scan of a file: the file (`file`),
@@ -188,12 +189,17 @@ impl<W: Write> SpecFile<W> {
         };
         let cols = head.columns(&d.data_keys);
         self.last += 1;
+        // `_head`: a negative `_ctime` is monitor counts.
+        let preset = if head.ctime < 0.0 {
+            format!("#M {}  ({MONITOR})", g(-head.ctime))
+        } else {
+            format!("#T {}  (sec)", g(head.ctime))
+        };
         let block = format!(
-            "\n#S {}  {}\n#D {}\n#T {}  (sec)\n#N {}\n#L {}\n",
+            "\n#S {}  {}\n#D {}\n{preset}\n#N {}\n#L {}\n",
             self.last,
             head.heading,
             date(head.time),
-            g(head.ctime),
             cols.len(),
             cols.join("  ")
         );
@@ -465,6 +471,24 @@ mod tests {
             date(1002.0)
         );
         assert_eq!(got, want);
+    }
+
+    #[test]
+    fn a_monitor_count_is_an_m_line() {
+        let head = json!({"heading": "ascan  th -1 1  1 -1000", "ctime": -1000.0, "epoch": true});
+        let got = text(
+            &[
+                start("scan", 1002.0, Some(head)),
+                descriptor("p", "scan", "primary", &["th", "det"]),
+                stop("scan", 1005.0, "success"),
+            ],
+            0,
+        );
+        assert!(
+            got.contains("\n#S 1  ascan  th -1 1  1 -1000\n#D ")
+                && got.contains("\n#M 1000  (icxrd)\n#N "),
+            "{got}"
+        );
     }
 
     #[test]

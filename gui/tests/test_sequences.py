@@ -84,6 +84,10 @@ class SequencesTest(unittest.TestCase):
         tth = next(b for b in sequences.get("Thin film") if b["kind"] == "scan")
         dip = dict(tth, dip=True)
         self.assertTrue(sequences.text(dip).endswith("det → CEN dip, set 0"), sequences.text(dip))
+        # Monitor counts read as SPEC takes them, a negative count time.
+        mon = {k: v for k, v in tth.items() if k != "time"}
+        mon["monitor"] = 10000
+        self.assertEqual(sequences.text(mon), "ascan tth -0.04 0.04 24 -10000  det → CEN, set 0")
 
     def test_lines_number_a_loop_s_blocks_inside_it(self):
         blocks = [{"kind": "erase"},

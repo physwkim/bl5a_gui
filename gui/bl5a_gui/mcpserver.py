@@ -632,7 +632,8 @@ SEQUENCE = Field(description="An alignment sequence: \"Coin cell\" (coin_align's
 USER = Field(description="Whose saved sequences, kept in <data folder>/alignments/<user>; null: the GUI's "
                          "Alignment user")
 BLOCKS = """Each block is an object with "kind": "scan" {type: ascan|lup|cscan|clup, motor, start, finish,
-time (s per point for ascan/lup, of the whole move for cscan/clup), intervals and settle (s) for ascan/lup,
+time (s per point for ascan/lup, of the whole move for cscan/clup) or, for ascan/lup only, monitor (counts
+per point, instead of time), intervals and settle (s) for ascan/lup,
 sleep (s) for cscan/clup, counter: det|ic1|icxrd, pick: CEN|COM|xMAX|EDGE (where the motor goes), dip
 (optional, true: CEN/COM/xMAX of a dip, of the scan turned over; not with EDGE), set (optional: set the motor
 to this there)}; "move" {moves: [[motor, position], ...], moved together};

@@ -47,6 +47,8 @@ pub const AXES: [&str; 11] = [
 ];
 /// SpecCreate's counters: scaler1 S1..S4.
 pub const CHANNELS: [&str; 4] = ["sec", "icxrd", "det", "ic1"];
+/// SPEC's `MON`, the channel a [`Preset::Monitor`] counts: S2.
+pub const MONITOR: &str = CHANNELS[1];
 
 fn connect_err(pv: &str, e: impl std::fmt::Display) -> Error {
     Error::new(format!("{pv}: {e}"))
@@ -392,11 +394,11 @@ pub enum Preset {
     Monitor(f64),
 }
 
-/// A step-scan point's count: [`Scaler::count`] for `seconds`, read as
+/// A step-scan point's count: [`Scaler::count`] to `preset`, read as
 /// the four channels.
 pub struct Count {
     pub scaler: Arc<Scaler>,
-    pub seconds: f64,
+    pub preset: Preset,
 }
 
 impl NamedObj for Count {
@@ -409,9 +411,9 @@ impl NamedObj for Count {
 impl TriggerableObj for Count {
     async fn trigger_dyn(&self) -> Status {
         let (status, setter) = Status::new();
-        let (scaler, seconds) = (self.scaler.clone(), self.seconds);
+        let (scaler, preset) = (self.scaler.clone(), self.preset);
         tokio::spawn(async move {
-            match scaler.count(Preset::Seconds(seconds)).await {
+            match scaler.count(preset).await {
                 Ok(()) => setter.success(),
                 Err(e) => setter.fail(StatusError::Failed(e.to_string())),
             }

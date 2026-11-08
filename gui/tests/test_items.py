@@ -159,6 +159,10 @@ class BlockTest(unittest.TestCase):
     SCAN = {"kind": "scan", "type": "cscan", "motor": "sy", "start": -1, "finish": 1, "time": 5, "sleep": 0.1,
             "counter": "ic1", "pick": "COM"}
 
+    # Counted to monitor counts on SPEC's MON, which only a step scan does.
+    STEP = {"kind": "scan", "type": "ascan", "motor": "th", "start": -1, "finish": 1, "intervals": 20,
+            "monitor": 10000, "settle": 0.1, "counter": "ic1", "pick": "CEN"}
+
     def with_(self, key, value):
         return dict(self.SCAN, **{key: value})
 
@@ -166,6 +170,7 @@ class BlockTest(unittest.TestCase):
         for b in (self.SCAN, self.with_("dip", True), self.with_("dip", False), dict(self.SCAN, pick="EDGE", dip=False),
                   {"kind": "scan", "type": "lup", "motor": "th", "start": -0.6, "finish": 0.6, "intervals": 30,
                    "time": 0.5, "settle": 0.1, "counter": "det", "pick": "CEN", "set": 0, "note": "half-cut"},
+                  self.STEP, dict(self.STEP, monitor=10000.0),
                   {"kind": "move", "moves": [["tth", 1], ["th", 0]]},
                   {"kind": "spec", "command": " atte 0 "},
                   {"kind": "wait", "seconds": 3},
@@ -180,6 +185,10 @@ class BlockTest(unittest.TestCase):
             (self.with_("motor", "zz"), "block 1 (scan): motor must be one of sy, shold"),
             (self.with_("time", 0), "block 1 (scan): time must be seconds > 0, got 0"),
             (self.with_("intervals", 10), "block 1 (scan): unknown field intervals"),
+            (self.with_("monitor", 1000), "block 1 (scan): monitor is for ascan and lup; a cscan counts for time"),
+            (dict(self.STEP, time=0.5), "block 1 (scan): time and monitor both given; a point counts to one"),
+            ({k: v for k, v in self.STEP.items() if k != "monitor"}, "block 1 (scan): time or monitor is missing"),
+            (dict(self.STEP, monitor=0.5), "monitor must be a whole number of counts >= 1, got 0.5"),
             (self.with_("counter", "sec"), "counter must be one of"),
             (self.with_("pick", "cen"), "pick must be one of"),
             (self.with_("dip", 1), "dip must be true or false, got 1"),

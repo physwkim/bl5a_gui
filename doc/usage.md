@@ -365,7 +365,7 @@ not starting with `.`, without `/` or `\`, and not Coin cell or Thin film.
 
 | Block | Fields | What it does |
 | --- | --- | --- |
-| scan | type, motor, start, finish, time; intervals and settle (ascan, lup) or sleep (cscan, clup); counter; go to; of a dip; set to | scans, checks the scan ([Before a stage moves](#before-a-stage-moves)), moves the motor to the statistic picked in go to and, when set to has a value, redefines that position with `set`; ascan and cscan are absolute, lup and clup relative to where the motor is |
+| scan | type, motor, start, finish; count (ascan, lup: seconds per point, or monitor counts on icxrd, SPEC's MON, which SPEC shows as a negative count time; cscan, clup: seconds of the whole move); intervals and settle (ascan, lup) or sleep (cscan, clup); counter; go to; of a dip; set to | scans, checks the scan ([Before a stage moves](#before-a-stage-moves)), moves the motor to the statistic picked in go to and, when set to has a value, redefines that position with `set`; ascan and cscan are absolute, lup and clup relative to where the motor is |
 | move | motor position pairs, `tth 1 th 0` | `umv` of them together |
 | spec | one command line | sends it to SPEC |
 | wait | seconds | waits |

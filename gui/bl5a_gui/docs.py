@@ -41,8 +41,10 @@ class Scan:
         if self.fly:
             return "{} {} {:g} {:g} {:g}".format(self.plan, self.motor, a.get("start", 0), a.get("finish", 0),
                                                  a.get("time", 0))
+        # SPEC's count time: monitor counts as their negative.
+        t = -a["monitor"] if "monitor" in a else a.get("time", 0)
         return "{} {} {:g} {:g} {} {:g}".format(self.plan, self.motor, a.get("start", 0), a.get("finish", 0),
-                                                a.get("intervals", 0), a.get("time", 0))
+                                                a.get("intervals", 0), t)
 
     def add(self, data):
         """One primary event: the motor position and the detector's counts."""

@@ -332,8 +332,9 @@ FullFileName_RBV), 온도(`BL5A:TC:*`), suspender용 링
 | `insitu_step(T, ramp, wait, soak, blocks, sequence, th_list, texpo, name)` | myinsitu의 온도 한 칸 + mymar_in |
 
 정렬은 블록 목록(`qs/src/plans/blocks.rs`)이다. 블록은 scan(type
-ascan·lup·cscan·clup, motor, start, finish, time, 스텝이면 intervals·settle,
-fly면 sleep, counter, pick CEN·COM·xMAX·EDGE, dip(참이면 딥의 CEN·COM·xMAX,
+ascan·lup·cscan·clup, motor, start, finish, 스텝이면 time(점당 초)이나
+monitor(점당 SPEC MON인 icxrd 카운트; SPEC처럼 음의 count time으로 쓰인다)
+중 하나와 intervals·settle, fly면 time(이동 전체 초)과 sleep, counter, pick CEN·COM·xMAX·EDGE, dip(참이면 딥의 CEN·COM·xMAX,
 EDGE와는 함께 못 씀), set), move(`umv`할 [motor,
 pos] 쌍), spec(명령 한 줄), wait(초), erase(mar345 판 지우기), loop(제
 `blocks`를 순서대로 `times`번; loop 안에 loop도 된다) 여섯 가지이고,

@@ -1,8 +1,9 @@
 //! An alignment as blocks, run in their order: a queue item carries the
 //! blocks it runs, as a list of objects, each with a `kind`:
 //!
-//! - `scan`: an alignment scan (`type` ascan, lup, cscan or clup), then the
-//!   motor to the scan's `pick` (CEN, COM, xMAX, EDGE), of its dip given
+//! - `scan`: an alignment scan (`type` ascan, lup, cscan or clup; an
+//!   ascan or lup counts each point for `time` seconds or to `monitor`
+//!   counts), then the motor to the scan's `pick` (CEN, COM, xMAX, EDGE), of its dip given
 //!   `dip` true (not EDGE), and, given `set`, `set motor <set>`;
 //! - `move`: `umv`, the `moves` ([motor, position] pairs) together;
 //! - `spec`: a SPEC command line;
@@ -22,7 +23,7 @@ use serde_json::{Map, Value, json};
 
 use super::Ops;
 use crate::ctx::Step;
-use crate::devices::{AXES, CHANNELS, Holder};
+use crate::devices::{AXES, CHANNELS, Holder, Preset};
 use crate::scan::{Motion, Scan};
 use crate::screen::{Pick, Stat};
 
@@ -52,8 +53,6 @@ struct ScanBlock {
     start: f64,
     finish: f64,
     relative: bool,
-    /// Seconds per point (ascan, lup) or of the whole move (cscan, clup).
-    time: f64,
     motion: Motion,
     counter: &'static str,
     pick: Pick,
@@ -84,7 +83,6 @@ impl ScanBlock {
             start: self.start,
             finish: self.finish,
             relative: self.relative,
-            ctime: self.time,
             motion: self.motion,
             det: self.counter,
             spec_file: ops.place.spec.clone(),
@@ -207,13 +205,32 @@ fn scan(f: &mut Fields<'_>) -> Result<ScanBlock, String> {
     let &(_, relative, fly) = TYPES.iter().find(|t| t.0 == ty).expect("one of TYPES");
     let motor = f.one_of("motor", &AXES)?;
     let (start, finish) = (f.num("start")?, f.num("finish")?);
-    let time = f.num_if("time", |t| t > 0.0, "seconds > 0")?;
+    let seconds = |f: &mut Fields<'_>| f.num_if("time", |t| t > 0.0, "seconds > 0");
     let motion = if fly {
+        if f.take("monitor").is_some() {
+            return Err(f.err(format!(
+                "monitor is for ascan and lup; a {ty} counts for time"
+            )));
+        }
+        let seconds = seconds(f)?;
         let sleep = f.num_if("sleep", |s| s >= 0.0, "seconds >= 0")?;
         Motion::Fly {
+            seconds,
             sleep: Duration::from_secs_f64(sleep),
         }
     } else {
+        let preset = match (f.take("time"), f.take("monitor")) {
+            (Some(_), Some(_)) => {
+                return Err(f.err("time and monitor both given; a point counts to one"));
+            }
+            (None, None) => return Err(f.err("time or monitor is missing")),
+            (Some(_), None) => Preset::Seconds(seconds(f)?),
+            (None, Some(_)) => Preset::Monitor(f.num_if(
+                "monitor",
+                |n| n >= 1.0 && n.fract() == 0.0,
+                "a whole number of counts >= 1",
+            )?),
+        };
         let n = f.num_if(
             "intervals",
             |n| n >= 1.0 && n.fract() == 0.0,
@@ -223,6 +240,7 @@ fn scan(f: &mut Fields<'_>) -> Result<ScanBlock, String> {
         Motion::Step {
             intervals: n as usize,
             settle: Duration::from_secs_f64(settle),
+            preset,
         }
     };
     let counter = f.one_of("counter", &counters())?;
@@ -239,7 +257,6 @@ fn scan(f: &mut Fields<'_>) -> Result<ScanBlock, String> {
         start,
         finish,
         relative,
-        time,
         motion,
         counter,
         pick,
@@ -436,8 +453,8 @@ mod tests {
                 start: -2.5,
                 finish: 2.5,
                 relative: true,
-                time: 12.5,
                 motion: Motion::Fly {
+                    seconds: 12.5,
                     sleep: Duration::from_millis(100)
                 },
                 counter: "ic1",
@@ -498,10 +515,26 @@ mod tests {
             s.motion,
             Motion::Step {
                 intervals: 30,
-                settle: Duration::from_millis(100)
+                settle: Duration::from_millis(100),
+                preset: Preset::Seconds(0.5),
             }
         );
         assert_eq!(s.set, Some(0.0));
+        let b = one(
+            json!({"kind": "scan", "type": "ascan", "motor": "th", "start": -0.6,
+            "finish": 0.6, "intervals": 30, "monitor": 10000, "settle": 0, "counter": "det",
+            "pick": "CEN"}),
+        )
+        .unwrap();
+        let Action::Scan(s) = b.action else { panic!() };
+        assert_eq!(
+            s.motion,
+            Motion::Step {
+                intervals: 30,
+                settle: Duration::ZERO,
+                preset: Preset::Monitor(1e4),
+            }
+        );
         assert_eq!(
             one(json!({"kind": "move", "moves": [["tth", 1], ["th", 0]]}))
                 .unwrap()
@@ -570,6 +603,36 @@ mod tests {
         assert!(with("counter", json!("sec")).contains("counter must be one of"));
         assert!(with("pick", json!("cen")).contains("pick must be one of"));
         assert!(with("dip", json!(1)).contains("dip must be true or false, got 1"));
+        assert_eq!(
+            with("monitor", json!(1000)),
+            "p: block 1 (scan): monitor is for ascan and lup; a cscan counts for time"
+        );
+        let mut step = scan.clone();
+        let o = step.as_object_mut().unwrap();
+        o.remove("sleep");
+        o.insert("type".into(), json!("lup"));
+        o.insert("intervals".into(), json!(10));
+        o.insert("settle".into(), json!(0));
+        assert!(one(step.clone()).is_ok());
+        let step_with = |pairs: &[(&str, Value)]| {
+            let mut b = step.clone();
+            for (k, v) in pairs {
+                b[*k] = v.clone();
+            }
+            one(b).unwrap_err()
+        };
+        assert_eq!(
+            step_with(&[("monitor", json!(1000))]),
+            "p: block 1 (scan): time and monitor both given; a point counts to one"
+        );
+        assert_eq!(
+            step_with(&[("time", Value::Null)]),
+            "p: block 1 (scan): time or monitor is missing"
+        );
+        assert_eq!(
+            step_with(&[("time", Value::Null), ("monitor", json!(0.5))]),
+            "p: block 1 (scan): monitor must be a whole number of counts >= 1, got 0.5"
+        );
         let pick = |b: Value| -> Result<Pick, String> {
             match one(b)?.action {
                 Action::Scan(s) => Ok(s.pick),

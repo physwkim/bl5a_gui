@@ -178,5 +178,17 @@ class FailedRunTest(unittest.TestCase):
         self.assertEqual(docs.outcome(run.exit_status, run.reason), "success")
 
 
+class TitleTest(unittest.TestCase):
+    """A scan's title is the command qs names its stage by (Scan::command)."""
+
+    def title(self, plan, **args):
+        return docs.Scan("u", plan, "th", "det", {"plan_args": dict(start=-1.0, finish=1.0, **args)}).title
+
+    def test_count_time(self):
+        self.assertEqual(self.title("ascan", intervals=20, time=0.5), "ascan th -1 1 20 0.5")
+        self.assertEqual(self.title("lup", intervals=20, monitor=10000.0), "lup th -1 1 20 -10000")
+        self.assertEqual(self.title("cscan", time=12.5, sleep=0.1), "cscan th -1 1 12.5")
+
+
 if __name__ == "__main__":
     unittest.main()

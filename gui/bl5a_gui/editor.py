@@ -138,8 +138,16 @@ class BlockDialog(qt.QDialog):
             self.intervals = qt.QSpinBox()
             self.intervals.setRange(1, 100000)
             self.intervals.setValue(int(b.get("intervals") or 20))
-            self.time = _line(_g(b["time"]))
-            self.time.setToolTip("Seconds per point (ascan, lup) or of the whole move (cscan, clup)")
+            self.time = _line(_g(b["monitor"] if "monitor" in b else b["time"]))
+            self.time.setToolTip("Seconds per point (ascan, lup) or of the whole move (cscan, clup),\n"
+                                 "or the monitor counts each point counts to")
+            self.per = _combo(["seconds", "monitor"], "monitor" if "monitor" in b else "seconds")
+            self.per.setToolTip("ascan/lup: count each point for seconds or to monitor counts on icxrd\n"
+                                "(SPEC's MON); cscan/clup count for seconds")
+            count = qt.QHBoxLayout()
+            count.setContentsMargins(0, 0, 0, 0)
+            count.addWidget(self.time)
+            count.addWidget(self.per)
             self.settle = _line(_g(b.get("settle", 0.1)))
             self.settle.setToolTip("ascan/lup: seconds to wait at each point before counting")
             self.sleep = _line(_g(b.get("sleep", 0.05)))
@@ -155,7 +163,7 @@ class BlockDialog(qt.QDialog):
             self.set = _line(_g(b.get("set")))
             self.set.setToolTip("Empty: keep the motor's position; a number: `set motor <number>` there")
             for label, w in (("Type", self.type), ("Motor", self.motor), ("Start", self.start),
-                             ("Finish", self.finish), ("Intervals", self.intervals), ("Time [s]", self.time),
+                             ("Finish", self.finish), ("Intervals", self.intervals), ("Count", count),
                              ("Settle [s]", self.settle), ("Sleep [s]", self.sleep), ("Counter", self.counter),
                              ("Go to", self.pick), ("", self.dip), ("Set to", self.set)):
                 form.addRow(label, w)
@@ -201,6 +209,9 @@ class BlockDialog(qt.QDialog):
         self.intervals.setEnabled(not fly)
         self.settle.setEnabled(not fly)
         self.sleep.setEnabled(fly)
+        if fly:
+            self.per.setCurrentText("seconds")
+        self.per.setEnabled(not fly)
 
     def _pick(self):
         self.dip.setEnabled(self.pick.currentText() != "EDGE")
@@ -211,7 +222,11 @@ class BlockDialog(qt.QDialog):
         if self.kind == "scan":
             t = self.type.currentText()
             b.update(type=t, motor=self.motor.currentText(), start=_num(self.start, "start"),
-                     finish=_num(self.finish, "finish"), time=_num(self.time, "time"))
+                     finish=_num(self.finish, "finish"))
+            if self.per.currentText() == "monitor":
+                b["monitor"] = _num(self.time, "monitor")
+            else:
+                b["time"] = _num(self.time, "time")
             if items.SCAN_TYPES[t]:
                 b["sleep"] = _num(self.sleep, "sleep")
             else:

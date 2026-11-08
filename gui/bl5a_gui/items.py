@@ -331,10 +331,21 @@ def _scan(f):
     f.one_of("motor", config.MOTORS)
     f.num("start")
     f.num("finish")
-    f.num("time", lambda t: t > 0, "seconds > 0")
     if fly:
+        if f.take("monitor") is not None:
+            raise f.err("monitor is for ascan and lup; a {} counts for time".format(f.block["type"]))
+        f.num("time", lambda t: t > 0, "seconds > 0")
         f.num("sleep", lambda s: s >= 0, "seconds >= 0")
     else:
+        seconds, monitor = f.take("time"), f.take("monitor")
+        if seconds is not None and monitor is not None:
+            raise f.err("time and monitor both given; a point counts to one")
+        if seconds is None and monitor is None:
+            raise f.err("time or monitor is missing")
+        if monitor is None:
+            f.num("time", lambda t: t > 0, "seconds > 0")
+        else:
+            f.num("monitor", lambda n: n >= 1 and n == int(n), "a whole number of counts >= 1")
         f.num("intervals", lambda n: n >= 1 and n == int(n), "a whole number >= 1")
         f.num("settle", lambda s: s >= 0, "seconds >= 0")
     f.one_of("counter", COUNTERS)
