@@ -657,7 +657,7 @@ stack in the item's data folder. A stack is one series on one q axis
 | --- | --- |
 | Stack | every stack the integrator holds, as `series — folder/file`, in path order; at start the last one is shown |
 | Refresh | asks the integrator again for its settings and its stacks |
-| Follow new rows | each new row brings up its stack (default on) |
+| Follow | each new row brings up its stack (default on) |
 | y | `frame #`, or `time [min]` from the first frame |
 | all th / th v | all frames, or only those taken at one th |
 | log I | log colour scale (default on) |
@@ -666,9 +666,9 @@ stack in the item's data folder. A stack is one series on one q axis
 | offset | the waterfall step, as a fraction of the rows' median maximum (default 0.3) |
 
 New rows arrive by themselves. A new stack shows up in the list when
-its first frame is integrated. With Follow new rows on, the tab shows
-the stack of the newest row, new or listed; off, it stays on the stack
-shown, or shows the new one when none was shown.
+its first frame is integrated. With Follow on, the tab shows the stack
+of the newest row, new or listed; off, it stays on the stack shown, or
+shows the new one when none was shown.
 
 The line at the bottom gives the stack's file, its number of rows and
 its q axis. It reads "integrator: not answering" when the integrator
