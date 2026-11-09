@@ -252,6 +252,46 @@ class CalibrationTabTest(TestCaseQt):
         self.qapp.processEvents()
         self.assertEqual(self.tab.picks, [(200, 150, 0)])
 
+    def test_the_side_shows_every_cell_whole_however_far_it_is_squeezed(self):
+        self.ready()
+        self.tab.resize(600, 900)
+        self.tab.show()
+        self.tab.plot.parentWidget().setSizes([150, 450])
+        self.qWaitForWindowExposed(self.tab)
+        # The result widens the panel after the side has its width.
+        self.refine()
+        self.integrator.reply.emit("calibrate", {"calibrating": 5})
+        self.calibration(5, poni=PONI.replace("Rot1: 0.0", "Rot1: -0.0039"))
+        for _ in range(4):  # the widening passes up table, panel, side and splitter
+            self.qapp.processEvents()
+        side = self.tab.plot.parentWidget().widget(0)
+        self.assertGreaterEqual(side.viewport().width(), side.widget().minimumSizeHint().width())
+        table, header = self.tab.table, self.tab.table.horizontalHeader()
+        for j in range(table.columnCount()):
+            self.assertGreaterEqual(table.columnWidth(j), max(table.sizeHintForColumn(j), header.sectionSizeHint(j)),
+                                    table.horizontalHeaderItem(j).text())
+        self.assertGreaterEqual(table.viewport().width(), header.length())
+
+    def test_the_side_widens_with_its_panel_alone(self):
+        # The tab's plot redraws, and so stirs the splitter, whenever the
+        # table changes; beside a still widget only the side can tell it.
+        label = qt.QLabel("short")
+        panel = qt.QWidget()
+        qt.QVBoxLayout(panel).addWidget(label)
+        split = qt.QSplitter(qt.Qt.Horizontal)
+        self.addCleanup(split.deleteLater)
+        side = calib._Side(panel)
+        split.addWidget(side)
+        split.addWidget(qt.QWidget())
+        split.resize(800, 300)
+        split.show()
+        split.setSizes([10, 790])
+        self.qWaitForWindowExposed(split)
+        label.setText("a label as wide as a table full of numbers")
+        for _ in range(4):
+            self.qapp.processEvents()
+        self.assertGreaterEqual(side.viewport().width(), panel.minimumSizeHint().width())
+
     def test_save_writes_the_refined_poni_and_asks_for_it_applied(self):
         self.ready()
         self.refine()

@@ -100,6 +100,29 @@ def _spin(lo, hi, value, decimals=None, step=None, tip=""):
     return box
 
 
+class _Side(qt.QScrollArea):
+    """Scrolls its panel up and down only: never narrower than the panel, so
+    the plot beside it gives up width rather than the panel's numbers."""
+
+    def __init__(self, panel):
+        super().__init__()
+        self.setWidgetResizable(True)
+        self.setFrameShape(qt.QFrame.NoFrame)
+        self.setHorizontalScrollBarPolicy(qt.Qt.ScrollBarAlwaysOff)
+        self.setWidget(panel)
+
+    def minimumSizeHint(self):
+        return qt.QSize(self.widget().minimumSizeHint().width() + self.verticalScrollBar().sizeHint().width(),
+                        super().minimumSizeHint().height())
+
+    def event(self, e):
+        # The panel's own updateGeometry() arrives here by way of the viewport:
+        # the splitter must hear that the panel widened as the result filled.
+        if e.type() == qt.QEvent.LayoutRequest:
+            self.updateGeometry()
+        return super().event(e)
+
+
 class CalibrationTab(qt.QWidget):
     """A calibrant frame with its rings where a PONI puts them; Refine
     sends it to the integrator, Save and apply writes the refined PONI and
@@ -185,7 +208,12 @@ class CalibrationTab(qt.QWidget):
         self.table.setHorizontalHeaderLabels(["Start", "Refined", "Change"])
         self.table.setVerticalHeaderLabels(["{} [{}]".format(name, unit) for name, _, _, unit in ROWS])
         self.table.setEditTriggers(qt.QAbstractItemView.NoEditTriggers)
-        self.table.horizontalHeader().setSectionResizeMode(qt.QHeaderView.Stretch)
+        # Columns as wide as their widest cell and the table as wide as its
+        # columns, so no number is cut short; _Side keeps the panel whole.
+        self.table.horizontalHeader().setSectionResizeMode(qt.QHeaderView.ResizeToContents)
+        self.table.setSizeAdjustPolicy(qt.QAbstractScrollArea.AdjustToContents)
+        self.table.setSizePolicy(qt.QSizePolicy.Fixed, self.table.sizePolicy().verticalPolicy())
+        self.table.setHorizontalScrollBarPolicy(qt.Qt.ScrollBarAlwaysOff)
         self.table.setVerticalScrollBarPolicy(qt.Qt.ScrollBarAlwaysOff)
         self.saveButton = qt.QPushButton("Save and apply…")
         self.saveButton.setToolTip("Write the refined PONI to a file and send it as the Integration box's "
@@ -276,12 +304,8 @@ class CalibrationTab(qt.QWidget):
         for w in (frame, start, calibrant, search, picks, self.refineButton, self.state, result):
             v.addWidget(w)
         v.addStretch(1)
-        side = qt.QScrollArea()
-        side.setWidgetResizable(True)
-        side.setFrameShape(qt.QFrame.NoFrame)
-        side.setWidget(panel)
         split = qt.QSplitter(qt.Qt.Horizontal)
-        split.addWidget(side)
+        split.addWidget(_Side(panel))
         split.addWidget(self.plot)
         split.setStretchFactor(1, 1)
         split.setSizes([420, 1000])
