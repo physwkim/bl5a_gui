@@ -175,8 +175,8 @@ to `SPEC` from `bl5a.env`.
 - A motor record's stop sends SPEC `abort_all`, which stops every SPEC
   motor, as `^C` would.
 - `SpecInterlock` in `st.cmd`, before `SpecCreate`, keeps the mar345 off
-  the tth arm: the mar's motors move only with tth >= 40, tth goes below
-  40 only with martran >= 1200. It reads SPEC user positions, so a `set`
+  the tth arm: the mar's motors move only with tth >= 81, tth goes below
+  81 only with martran >= 1200. It reads SPEC user positions, so a `set`
   of tth or martran moves the line with it. Every motor it names must be
   in `SpecCreate`'s list.
 - Use the site's Channel Access settings. The special ports in the

@@ -19,10 +19,10 @@ epicsEnvSet("EPICS_DB_INCLUDE_PATH", "$(MOTOR)/db:$(SPEC_IOC)/db")
 # RBV lags the counts by at most one tick.
 # The mar345 hits the tth arm when it moves with tth low (mymar_in lifts
 # tth to 45 before it moves the mar in, align_in moves it out below
-# martran 1200): the mar's motors move only with tth >= 40, and tth goes
-# below 40 only with martran >= 1200. A motor record's move that breaks
+# martran 1200): the mar's motors move only with tth >= 81, and tth goes
+# below 81 only with martran >= 1200. A motor record's move that breaks
 # it is refused; a SPEC move that breaks it is stopped with ^C.
-SpecInterlock("$(PORT)", "tth", 40, "martran", 1200, "martran marz marsdd marshut marx ipbsx ipbsy")
+SpecInterlock("$(PORT)", "tth", 81, "martran", 1200, "martran marz marsdd marshut marx ipbsx ipbsy")
 SpecCreate("$(PORT)", "$(SPEC)", "$(MPORT)", "sy shold th tth nu scell martran marsdd marshut sx phi marz marx ipbsx ipbsy", "sec icxrd det ic1", 20, 500)
 
 dbLoadRecords("$(SPEC_IOC)/db/spec.db", "P=$(P),PORT=$(PORT)")
