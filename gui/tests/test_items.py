@@ -33,13 +33,13 @@ class MarSeriesTest(unittest.TestCase):
     def test_single_shot(self):
         item = items.mar_series("ZnFC_Pcell_1Vdelithi", 3)
         self.assertEqual(item, {"item_type": "plan", "name": "mar_series", "args": [],
-                                "kwargs": {"name": "ZnFC_Pcell_1Vdelithi", "texpo": 3.0, "geometry": "standard",
+                                "kwargs": {"name": "ZnFC_Pcell_1Vdelithi", "texpo": 3.0, "mode": "static",
                                            "n": 1, "md": {"series": "ZnFC_Pcell_1Vdelithi"}}})
 
     def test_repeat(self):
-        kw = items.mar_series("AgFC", -2e5, "high_q_asymm", n=40, ti=3, series="cell_7")["kwargs"]
-        self.assertEqual((kw["n"], kw["ti"], kw["texpo"], kw["geometry"], kw["md"]),
-                         (40, 3.0, -2e5, "high_q_asymm", {"series": "cell_7"}))
+        kw = items.mar_series("AgFC", -2e5, "rocking1", n=40, ti=3, series="cell_7")["kwargs"]
+        self.assertEqual((kw["n"], kw["ti"], kw["texpo"], kw["mode"], kw["md"]),
+                         (40, 3.0, -2e5, "rocking1", {"series": "cell_7"}))
 
     def test_macro_limits(self):
         for texpo in (0, 0.5, 20.5, math.nan, math.inf, "x"):
@@ -57,7 +57,7 @@ class MarSeriesTest(unittest.TestCase):
             with self.assertRaises(Invalid, msg=n):
                 items.mar_series("f", 2, n=n, ti=3)
         with self.assertRaises(Invalid):
-            items.mar_series("f", 2, geometry="tall")
+            items.mar_series("f", 2, mode="tall")
 
 
 class InsituTest(unittest.TestCase):

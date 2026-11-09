@@ -41,15 +41,17 @@ class BatteryForm(qt.QWidget):
         self.n.setRange(1, 100000)
         self.n.setValue(1)
         self.ti = _line("3", "Minutes from one frame's start to the next, more than 2.5")
-        self.geometry = qt.QComboBox()
-        self.geometry.addItems(items.GEOMETRIES)
-        self.geometry.setToolTip("mymar's mar345 positions: martran, marsdd, scan size")
+        self.scanMode = qt.QComboBox()
+        self.scanMode.addItems(items.MODES)
+        self.scanMode.setToolTip("static: mar345expose, a still frame\n"
+                                 "rocking1: mar345_lab6, th and phi rock from -1° to +1° during the exposure\n"
+                                 "rocking2: mar345_lab6_wide, from -5° to +5°")
         self.series = _line(tip="The data folder and stack the frames go to (no spaces); empty: the file name")
         form.addRow("File name", self.name)
         form.addRow("Texpo", self.texpo)
         form.addRow("N", self.n)
         form.addRow("Ti [min]", self.ti)
-        form.addRow("Geometry", self.geometry)
+        form.addRow("Scan mode", self.scanMode)
         form.addRow("Series", self.series)
         self.add = qt.QPushButton("Add to queue")
         self.stopAfterFrame = qt.QPushButton("Stop after frame")
@@ -72,7 +74,7 @@ class BatteryForm(qt.QWidget):
 
     def item(self):
         repeat = self.repeat.isChecked()
-        return items.mar_series(self.name.text().strip(), self.texpo.text().strip(), self.geometry.currentText(),
+        return items.mar_series(self.name.text().strip(), self.texpo.text().strip(), self.scanMode.currentText(),
                                 n=self.n.value() if repeat else 1,
                                 ti=self.ti.text().strip() if repeat else None,
                                 series=self.series.text().strip() or None)

@@ -285,20 +285,20 @@ impl<'a> Ops<'a> {
         self.event(&self.stages.clone(), values).await
     }
 
-    /// SPEC's `mar345expose(name, texpo)`: it names the file on the IOC,
-    /// works the shutter, counts (`uct`, in pieces of 429 s), logs
-    /// `exp_condition`, has the plate read out and keeps `file_no`
-    /// (`mar345readout`). The plan first points the IOC's FilePath at the
-    /// item's folder, which the macro leaves alone. An "exposures" event
-    /// with the file and the counts of the last count.
-    async fn expose(&self, name: &str, texpo: f64) -> Step {
+    /// SPEC's `cmd(name, texpo)`, `mar345expose` or one of its rocking
+    /// kin: it names the file on the IOC, works the shutter, counts
+    /// (`uct`, in pieces of 429 s), logs `exp_condition`, has the plate
+    /// read out and keeps `file_no` (`mar345readout`). The plan first
+    /// points the IOC's FilePath at the item's folder, which the macro
+    /// leaves alone. An "exposures" event with the file and the counts of
+    /// the last count.
+    async fn expose(&self, cmd: &str, name: &str, texpo: f64) -> Step {
         let (cam, scaler) = (self.dev.cam.clone(), self.dev.scaler.clone());
         let (dir, file) = (self.place.dir.clone(), name.to_string());
         self.ctx
             .call(async move { cam.name_file(&dir, &file).await })
             .await?;
-        self.spec(&format!("mar345expose(\"{name}\", {texpo})"))
-            .await?;
+        self.spec(&format!("{cmd}(\"{name}\", {texpo})")).await?;
         let cam = self.dev.cam.clone();
         let (counts, next, file) = self
             .ctx

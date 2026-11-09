@@ -14,7 +14,9 @@ import unicodedata
 from . import config
 from .docs import outcome
 
-GEOMETRIES = ("standard", "high_q_asymm", "low_q_symmetric")
+# mar_series's scan modes: mar345expose, mar345_lab6 (th and phi rock
+# over ±1° during the exposure), mar345_lab6_wide (±5°).
+MODES = ("static", "rocking1", "rocking2")
 TH_LIST = (-0.05, 0.11, 0.13, 0.15)
 IN_TEXPO = -7e4
 # changec's DELTA_K in the sixc state; qs's default.
@@ -128,7 +130,7 @@ def folder(item):
     return posixpath.join(str(root), name) if root else name
 
 
-def mar_series(name, texpo, geometry="standard", n=1, ti=None, series=None):
+def mar_series(name, texpo, mode="static", n=1, ti=None, series=None):
     """mymar1 (n = 1, ti None) or mymar (n frames, one every ti minutes)."""
     kwargs = {"name": file_name(name, "filename")}
     texpo = exposure(texpo, "Texpo")
@@ -136,9 +138,9 @@ def mar_series(name, texpo, geometry="standard", n=1, ti=None, series=None):
         # mymar: "Exposure Time in [sec]: 1 ~ 20".
         raise Invalid("Texpo: seconds 1 to 20, or negative monitor counts, got {:g}".format(texpo))
     kwargs["texpo"] = texpo
-    if geometry not in GEOMETRIES:
-        raise Invalid("geometry: one of {}, got {!r}".format(", ".join(GEOMETRIES), geometry))
-    kwargs["geometry"] = geometry
+    if mode not in MODES:
+        raise Invalid("mode: one of {}, got {!r}".format(", ".join(MODES), mode))
+    kwargs["mode"] = mode
     kwargs["n"] = n = count(n, "N")
     if ti is not None:
         ti = number(ti, "Ti")
@@ -476,7 +478,7 @@ def describe(item):
     shown = []
     if "blocks" in kw and "sequence" not in kw:
         shown.append("blocks={}".format(len(kw["blocks"]) if isinstance(kw["blocks"], list) else "?"))
-    for k in ("sequence", "T", "ramp", "wait", "tolerance", "soak", "n", "ti", "texpo", "geometry", "th_list",
+    for k in ("sequence", "T", "ramp", "wait", "tolerance", "soak", "n", "ti", "texpo", "mode", "th_list",
               "motor", "start", "finish", "intervals", "time", "relative", "counter"):
         if k in kw:
             v = kw[k]

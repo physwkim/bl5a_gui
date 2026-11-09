@@ -278,16 +278,10 @@ The Battery form queues `mar_series`: SPEC's `mymar1` (one frame) or
 | Texpo | seconds 1 to 20, or a negative number of monitor counts | default 2 |
 | N | whole number, at least 1 | Repeat only: the number of frames |
 | Ti [min] | more than 2.5 | Repeat only: from one frame's start to the next |
-| Geometry | `standard`, `high_q_asymm`, `low_q_symmetric` | Repeat only: mymar's mar345 positions, below; Single shot leaves the mar where it stands |
+| Scan mode | `static`, `rocking1`, `rocking2` | the macro each frame is taken with: `mar345expose` (still), `mar345_lab6` (th and phi rock from −1° to +1°), `mar345_lab6_wide` (−5° to +5°) |
 | Series | a folder name ([Data](#data)) | the data folder and stack the frames go to; empty means the file name |
 
 ![Repeat: twelve frames, ten minutes apart](img/battery-repeat.png)
-
-| Geometry | `mar_ip7` arguments |
-| --- | --- |
-| standard | `-85 435 100 330 50 1.2 -6.8` |
-| high_q_asymm | `-85 435 110 330 80 1.2 -6.8` |
-| low_q_symmetric | `160 435 36 345 54 1.2 -6.8` |
 
 **Add to queue** checks the fields first. A bad value opens a "Battery"
 box that names the field and the rule. Then the GUI asks:
@@ -296,21 +290,18 @@ box that names the field and the rule. Then the GUI asks:
 
 **Yes** queues the item; **No** queues nothing.
 
-**Move tth to 80° or more first.** `mar_series` does not move tth, and
-`mar_ip7` refuses the upward geometry below 80° ("Two Theta Angle is too
-low for UPWARD Geometry."). In the simulation the plan then fails with
-that message; this has not been tried against the real SPEC. While the
-queue is idle you can type `umv tth 83` in the SPEC console. bl5a-sim
-does not model `umv`; there, set tth's step and click ▶ instead.
+**Set the geometry first.** `mar_series` moves neither tth nor the mar's
+motors: the frames are taken where they stand.
 
 What a `mar_series` does, in order:
 
 1. `mar345closeshutter`, `scell` to 0, `counters 2 3`, `fi 0 1 0 0`,
-   `ic_range 4`, a 2 s wait, `mar_ip7 <geometry>` (Repeat only), `scell` to 0.
+   `ic_range 4`, a 2 s wait, `scell` to 0.
 2. For each frame: the item's data folder goes to the mar345 IOC's
-   FilePath, then SPEC's `mar345expose("<name>", <texpo>)` names the
-   file, works the shutter, counts, logs `exp_condition`, has the plate
-   read out and runs `mar345readout`.
+   FilePath, then the scan mode's macro (`mar345expose`, `mar345_lab6`
+   or `mar345_lab6_wide`) with `("<name>", <texpo>)` names the file,
+   works the shutter, rocks th and phi in the rocking modes, counts, logs
+   `exp_condition`, has the plate read out and runs `mar345readout`.
 3. Frame *i* starts *i*·Ti after the first frame. Between frames the plan
    only waits.
 

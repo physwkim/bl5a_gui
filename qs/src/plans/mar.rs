@@ -16,11 +16,12 @@ use crate::devices::Devices;
 
 /// The counter the frames' macros plot (align_in.mac's `plotselect det`).
 const DET: &str = "det";
-/// mymar's three `mar_ip7` lines.
-const GEOMETRIES: [(&str, &str); 3] = [
-    ("standard", "-85 435 100 330 50 1.2 -6.8"),
-    ("high_q_asymm", "-85 435 110 330 80 1.2 -6.8"),
-    ("low_q_symmetric", "160 435 36 345 54 1.2 -6.8"),
+/// The exposure macro of each scan mode: a still frame, and the LaB6
+/// rocks of th and phi over ±1° and ±5° during the exposure.
+const MODES: [(&str, &str); 3] = [
+    ("static", "mar345expose"),
+    ("rocking1", "mar345_lab6"),
+    ("rocking2", "mar345_lab6_wide"),
 ];
 /// mymar's `do_sleep(2)` after its set-up and after each frame.
 const SETTLE: f64 = 2.0;
@@ -35,13 +36,13 @@ struct Series {
     period: f64,
     texpo: f64,
     n: usize,
-    geometry: &'static str,
+    /// The scan mode's macro, `(name, texpo)`.
+    expose: &'static str,
 }
 
 /// mymar: `n` frames, frame `i` from `i·Ti` after the first. Once set up
 /// it waits only between frames, so a deferred pause lands before the next
-/// frame, never after it. mymar1 (n = 1) takes its frame with the mar
-/// where it stands: no `mar_ip7`.
+/// frame, never after it. The mar stays where it stands: no `mar_ip7`.
 async fn series(ops: &Ops<'_>, s: &Series) -> Step {
     ops.spec("mar345closeshutter").await?;
     ops.umv(&[("scell", 0.0)]).await?;
@@ -50,9 +51,6 @@ async fn series(ops: &Ops<'_>, s: &Series) -> Step {
     ops.spec("fi 0 1 0 0").await?;
     ops.spec("ic_range 4").await?;
     ops.sleep(SETTLE).await?;
-    if s.n > 1 {
-        ops.spec(&format!("mar_ip7 {}", s.geometry)).await?;
-    }
     ops.umv(&[("scell", 0.0)]).await?;
     ops.between_frames(SETTLE).await?;
     let t0 = Instant::now();
@@ -62,7 +60,7 @@ async fn series(ops: &Ops<'_>, s: &Series) -> Step {
             ops.between_frames(start_delay(i, elapsed, s.period))
                 .await?;
         }
-        ops.expose(&s.name, s.texpo).await?;
+        ops.expose(s.expose, &s.name, s.texpo).await?;
         ops.between_frames(SETTLE).await?;
     }
     Ok(())
@@ -108,7 +106,7 @@ async fn mymar_in(ops: &Ops<'_>, name: &str, th_list: &[f64], texpo: f64) -> Ste
     ops.umv(&[("scell", 0.9)]).await?;
     for &th in th_list {
         ops.umv(&[("th", th)]).await?;
-        ops.expose(name, texpo).await?;
+        ops.expose("mar345expose", name, texpo).await?;
     }
     ops.spec("ic_offset 1").await?;
     ops.spec("fi 1 0 1 1").await?;
@@ -214,7 +212,7 @@ impl Temperature {
 
 fn register_series(reg: &mut Registry, devices: &Devices, root: &Path) {
     const PLAN: &str = "mar_series";
-    const NAMES: &[&str] = &["name", "ti", "texpo", "n", "geometry", "md"];
+    const NAMES: &[&str] = &["name", "ti", "texpo", "n", "mode", "md"];
     let (dev, data_root) = (devices.clone(), root.to_path_buf());
     let factory: PlanFactory = Arc::new(move |_reg, raw| {
         let args = Args::parse(PLAN, NAMES, raw)?;
@@ -228,17 +226,17 @@ fn register_series(reg: &mut Registry, devices: &Devices, root: &Path) {
         if n == 0 {
             return Err(format!("{PLAN}: n must be at least 1"));
         }
-        let key = args.str_or("geometry", GEOMETRIES[0].0)?;
-        let (_, geometry) = GEOMETRIES.iter().find(|(k, _)| *k == key).ok_or_else(|| {
-            let known: Vec<_> = GEOMETRIES.iter().map(|(k, _)| *k).collect();
-            format!("{PLAN}: geometry must be one of {known:?}, got {key:?}")
+        let key = args.str_or("mode", MODES[0].0)?;
+        let (_, expose) = MODES.iter().find(|(k, _)| *k == key).ok_or_else(|| {
+            let known: Vec<_> = MODES.iter().map(|(k, _)| *k).collect();
+            format!("{PLAN}: mode must be one of {known:?}, got {key:?}")
         })?;
         let s = Series {
             name,
             period: ti * 60.0,
             texpo,
             n,
-            geometry,
+            expose,
         };
         let extra = json!({
             "detectors": ["scaler"],
@@ -247,8 +245,8 @@ fn register_series(reg: &mut Registry, devices: &Devices, root: &Path) {
             "ti": ti,
             "texpo": texpo,
             "num_points": n,
-            "geometry": key,
-            "mar_ip7": geometry,
+            "mode": key,
+            "expose": expose,
         });
         let (md, place) = item_md(PLAN, &data_root, extra, args.md()?)?;
         let dev = dev.clone();
@@ -259,13 +257,14 @@ fn register_series(reg: &mut Registry, devices: &Devices, root: &Path) {
             move |ctx| async move { series(&Ops::new(&ctx, &dev, &place), &s).await },
         ))
     });
-    let geometries: Vec<_> = GEOMETRIES.iter().map(|(k, _)| *k).collect();
+    let modes: Vec<_> = MODES.iter().map(|(k, _)| *k).collect();
     reg.register_plan_with_meta(
         PLAN,
         factory,
         PlanMeta {
             description: Some(
-                "mymar (n = 1: mymar1, the mar left where it stands): n mar345 frames, one every ti minutes."
+                "mymar (n = 1: mymar1), the mar left where it stands: n mar345 frames, one every ti minutes, \
+                 each by the mode's macro."
                     .into(),
             ),
             parameters: vec![
@@ -282,11 +281,14 @@ fn register_series(reg: &mut Registry, devices: &Devices, root: &Path) {
                 optional(param("n", "int", "Number of frames."), "1"),
                 optional(
                     param(
-                        "geometry",
+                        "mode",
                         "str",
-                        &format!("mar_ip7 geometry: one of {geometries:?}."),
+                        &format!(
+                            "Scan mode, one of {modes:?}: mar345expose, mar345_lab6 (th and phi \
+                             rock over ±1°), mar345_lab6_wide (±5°)."
+                        ),
                     ),
-                    "'standard'",
+                    "'static'",
                 ),
                 optional(param("md", "dict", "Extra start-document metadata."), "{}"),
             ],

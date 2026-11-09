@@ -380,6 +380,8 @@ impl Run<'_> {
             "mar345openshutter" => self.shutter(true),
             "mar345closeshutter" => self.shutter(false),
             "mar345expose" => self.mar345expose(&args).await?,
+            "mar345_lab6" => self.mar345_rock(&args, 1.0).await?,
+            "mar345_lab6_wide" => self.mar345_rock(&args, 5.0).await?,
             "local" => self.local(&args),
             "exp_condition" => {
                 let filename = self.shared.lock().vars.get("filename").cloned();
@@ -758,6 +760,19 @@ impl Run<'_> {
         self.mar345_run("Acquire", "Scanning", " mar345 scanning ", 1.0, 0.5)
             .await?;
         self.mar345readout().await
+    }
+
+    /// `mar345_lab6(filename, exposure)` and `mar345_lab6_wide`: th and
+    /// phi from −w to w (1° and 5°) across the exposure. The sim moves them
+    /// to −w, exposes still and moves them to w; the frame does not model
+    /// the rock.
+    async fn mar345_rock(&mut self, args: &[&str], w: f64) -> Result<(), Exit> {
+        if args.len() != 2 {
+            return Err(self.fail("Usage:  mar345_lab6(\"filename\", Texpo)"));
+        }
+        self.move_and_wait(&[("th", -w), ("phi", -w)]).await?;
+        self.mar345expose(args).await?;
+        self.move_and_wait(&[("th", w), ("phi", w)]).await
     }
 
     /// `mar345readout(filename)`: `file_no`, the number of the file

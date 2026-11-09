@@ -1005,7 +1005,10 @@ def build(bl):
                          texpo: Annotated[float, Field(description="seconds 1 to 20, or negative monitor counts")],
                          beamstop_in_place: Annotated[bool, Field(description="the operator confirmed the "
                                                                               "beamstop is in place")],
-                         geometry: Literal[items.GEOMETRIES] = "standard",
+                         mode: Annotated[Literal[items.MODES], Field(description="static: mar345expose, a still "
+                                                                                 "frame; rocking1: mar345_lab6, th "
+                                                                                 "and phi rock over ±1°; rocking2: "
+                                                                                 "mar345_lab6_wide, ±5°")] = "static",
                          n: Annotated[int, Field(ge=1, description="frames; more than 1 needs ti")] = 1,
                          ti: Annotated[float | None, Field(description="minutes from one frame's start to the "
                                                                        "next, more than 2.5")] = None,
@@ -1018,7 +1021,7 @@ def build(bl):
         if not beamstop_in_place:
             raise ToolError("the frames are taken with the shutter open: queue them once the operator confirms "
                             "the beamstop is in place")
-        return out(bl.add([items.mar_series(name, texpo, geometry, n=n, ti=ti, series=series)], data_folder))
+        return out(bl.add([items.mar_series(name, texpo, mode, n=n, ti=ti, series=series)], data_folder))
 
     @tool()
     def queue_insitu(rows: Annotated[list[InsituRow], Field(min_length=1)],

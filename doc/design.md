@@ -344,7 +344,7 @@ FullFileName_RBV), 온도(`BL5A:TC:*`), suspender용 링
 | plan | 대응 매크로 |
 | --- | --- |
 | `align(blocks, sequence)` | coin_align, align_in.mac(정렬 순서로) |
-| `mar_series(name, ti, texpo, n, geometry)` | mymar1(n=1), mymar |
+| `mar_series(name, ti, texpo, n, mode)` | mymar1(n=1), mymar; mode의 매크로로 노출 |
 | `insitu_step(T, ramp, wait, soak, blocks, sequence, th_list, texpo, name)` | myinsitu의 온도 한 칸 + mymar_in |
 | `step_scan(motor, start, finish, intervals, time, relative, counter)` | ascan, lup(relative) |
 
@@ -376,9 +376,9 @@ coin_align, Thin film = align_in.mac)이 읽기 전용으로 있고, 이용자 �
   (12.5 s, 0.1 s) → COM, 상대 fly shold −2.0…2.0(10.5 s, 0.1 s) → COM →
   `mar345closeshutter` → erase → marshut 340. 검출기는 ic1이다.
 - `mar_series`: `mar345closeshutter`, scell 0, `counters 2 3`, `fi 0 1 0 0`,
-  `ic_range 4`, `mar_ip7 <geometry>`, scell 0 뒤 n 프레임. geometry는 mymar의
-  세 벌이다: Standard `-85 435 100 330 50 1.2 -6.8`(매크로 기본), High Q Asymm
-  `-85 435 110 330 80 1.2 -6.8`, Low Q Symmetric `160 435 36 345 54 1.2 -6.8`.
+  `ic_range 4`, scell 0 뒤 n 프레임; `mar_ip7`는 보내지 않는다(mar는 있던
+  자리에서 노출). 프레임은 mode의 매크로로 찍는다: static `mar345expose`,
+  rocking1 `mar345_lab6`(th·phi −1→+1), rocking2 `mar345_lab6_wide`(−5→+5).
   i번째 프레임은 t0 + i·Ti에 시작한다(매크로와 같이 밀리지 않고, 넘치면 다음
   경계로). 정지 요청은 프레임 사이에서 먹는다.
 - Thin film: align_in.mac 순서 그대로다. 준비는 `ds_wid 0.5 1.0`,
