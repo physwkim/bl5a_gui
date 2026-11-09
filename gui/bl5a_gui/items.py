@@ -10,6 +10,7 @@ import math
 import posixpath
 import unicodedata
 
+from . import config
 from .docs import outcome
 
 GEOMETRIES = ("standard", "high_q_asymm", "low_q_symmetric")
@@ -269,13 +270,36 @@ def align(plan, series=None):
     return plan_item(plan, md=md) if md else plan_item(plan)
 
 
+# scaler1's counters, qs's CHANNELS (qs/src/devices.rs).
+DETECTORS = ("sec", "icxrd", "det", "ic1")
+
+
+def step_scan(motor, start, finish, intervals, time, relative=False, det="det", series=None):
+    """One ascan (lup when relative) of `motor`, counting `time` s at each
+    of intervals + 1 points (qs plans/scan.rs)."""
+    if motor not in config.MOTORS:
+        raise Invalid("motor: one of {}, got {!r}".format(", ".join(config.MOTORS), motor))
+    if det not in DETECTORS:
+        raise Invalid("det: one of {}, got {!r}".format(", ".join(DETECTORS), det))
+    time = number(time, "time")
+    if time <= 0:
+        raise Invalid("time: seconds per point, positive, got {:g}".format(time))
+    kwargs = {"motor": motor, "start": number(start, "start"), "finish": number(finish, "finish"),
+              "intervals": count(intervals, "intervals"), "time": time, "relative": bool(relative), "det": det}
+    md = series_md(series)
+    if md:
+        kwargs["md"] = md
+    return plan_item("step_scan", **kwargs)
+
+
 def describe(item):
     """(plan, name, parameters, folder, user) for the queue's cells."""
     kw = item.get("kwargs") or {}
     md = kw.get("md") if isinstance(kw.get("md"), dict) else {}
     plan = str(item.get("name") or "")
     shown = []
-    for k in ("T", "ramp", "wait", "tolerance", "soak", "align", "n", "ti", "texpo", "geometry", "th_list"):
+    for k in ("T", "ramp", "wait", "tolerance", "soak", "align", "n", "ti", "texpo", "geometry", "th_list",
+              "motor", "start", "finish", "intervals", "time", "relative", "det"):
         if k in kw:
             v = kw[k]
             if isinstance(v, list):

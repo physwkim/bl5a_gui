@@ -81,12 +81,15 @@ def test_tools_and_their_arguments():
     tools = {t.name: t for t in anyio.run(mcpserver.build(bl).list_tools)}
     assert set(tools) == {
         "status", "queue", "history", "motors", "scans", "scan", "alignment", "messages", "spec_log", "commands",
-        "integration", "stacks", "stack", "frame_image", "spec_result", "queue_alignment", "queue_mar_series",
+        "integration", "stacks", "stack", "frame_image", "spec_result", "queue_alignment", "queue_scan",
+        "queue_mar_series",
         "queue_insitu", "queue_remove", "queue_move", "queue_clear", "queue_start", "queue_stop",
         "queue_autostart", "environment_open", "environment_close", "pause", "resume", "stop", "abort",
         "stop_after_frame", "tweak", "spec_command", "spec_abort", "integration_set"}
     mar = tools["queue_mar_series"].input_schema
     assert set(mar["required"]) == {"name", "texpo", "beamstop_in_place"}
+    scan = tools["queue_scan"].input_schema
+    assert set(scan["required"]) == {"motor", "start", "finish", "intervals", "time"}
     assert tools["messages"].description.startswith("What the GUI's Messages tab shows")
     assert set(tools["messages"].input_schema["properties"]) == {"since", "limit"}
     assert tools["status"].annotations.read_only_hint

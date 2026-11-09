@@ -1,9 +1,9 @@
-"""The battery and in-situ forms. Each builds its items with `items` and
-emits them; nothing reaches the queue that `items` refused."""
+"""The battery, in-situ and scan forms. Each builds its items with `items`
+and emits them; nothing reaches the queue that `items` refused."""
 
 from silx.gui import qt
 
-from . import items
+from . import config, items
 from .items import Invalid
 
 
@@ -87,6 +87,63 @@ class BatteryForm(qt.QWidget):
             qt.QMessageBox.Yes | qt.QMessageBox.No, qt.QMessageBox.No)
         if answer == qt.QMessageBox.Yes:
             self.queueRequested.emit(item)
+
+
+class ScanForm(qt.QWidget):
+    """One ascan or lup of any motor as a step_scan item: drawn in the Scan
+    tab and written to the series' SPEC file, as an alignment's scans."""
+
+    queueRequested = qt.Signal(object)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        form = qt.QFormLayout(self)
+        self.lup = qt.QRadioButton("lup (relative)")
+        self.ascan = qt.QRadioButton("ascan (absolute)")
+        self.lup.setChecked(True)
+        self.lup.setToolTip("start and finish are offsets from where the motor is; it goes back there after")
+        self.ascan.setToolTip("start and finish are positions; the motor stays at finish")
+        modes = qt.QHBoxLayout()
+        modes.addWidget(self.lup)
+        modes.addWidget(self.ascan)
+        form.addRow(modes)
+        self.motor = qt.QComboBox()
+        self.motor.addItems(config.MOTORS)
+        self.start = _line("-0.1")
+        self.finish = _line("0.1")
+        self.intervals = qt.QSpinBox()
+        self.intervals.setRange(1, 10000)
+        self.intervals.setValue(10)
+        self.intervals.setToolTip("Steps; the scan takes intervals + 1 points")
+        self.time = _line("1", "Seconds counted at each point")
+        self.det = qt.QComboBox()
+        self.det.addItems(items.DETECTORS)
+        self.det.setCurrentText("det")
+        self.det.setToolTip("The counter the scan's CEN, COM and peak are of")
+        self.series = _line(tip="The data folder whose SPEC file gets the scan (no spaces); empty: step_scan")
+        form.addRow("Motor", self.motor)
+        form.addRow("Start", self.start)
+        form.addRow("Finish", self.finish)
+        form.addRow("Intervals", self.intervals)
+        form.addRow("Time [s]", self.time)
+        form.addRow("Counter", self.det)
+        form.addRow("Series", self.series)
+        self.add = qt.QPushButton("Add to queue")
+        form.addRow(self.add)
+        self.add.clicked.connect(self._add)
+
+    def item(self):
+        return items.step_scan(self.motor.currentText(), self.start.text().strip(), self.finish.text().strip(),
+                               self.intervals.value(), self.time.text().strip(), relative=self.lup.isChecked(),
+                               det=self.det.currentText(), series=self.series.text().strip() or None)
+
+    def _add(self):
+        try:
+            item = self.item()
+        except Invalid as e:
+            qt.QMessageBox.warning(self, "Scan", str(e))
+            return
+        self.queueRequested.emit(item)
 
 
 COOLING_TIP = "myinsitu's last step: ramp 25 °C/min to 25 °C, soak 3600 points,\nno alignment or frames"

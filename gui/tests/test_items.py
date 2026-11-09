@@ -220,5 +220,35 @@ class FinishedTest(unittest.TestCase):
                          "mar_series ended: fail: plan build failed: texpo")
 
 
+class StepScanTest(unittest.TestCase):
+    def test_lup(self):
+        item = items.step_scan("th", "-0.1", 0.1, 4, "0.1", relative=True)
+        self.assertEqual(item, {"item_type": "plan", "name": "step_scan", "args": [],
+                                "kwargs": {"motor": "th", "start": -0.1, "finish": 0.1, "intervals": 4,
+                                           "time": 0.1, "relative": True, "det": "det"}})
+        self.assertEqual(items.describe(item)[:3], ("step_scan", "",
+                                                    "motor=th start=-0.1 finish=0.1 intervals=4 time=0.1 "
+                                                    "relative=True det=det"))
+
+    def test_ascan_in_a_series(self):
+        item = items.step_scan("shold", 1, -1, 10, 0.5, det="ic1", series="cell1")
+        self.assertEqual(item["kwargs"]["md"], {"series": "cell1"})
+        self.assertFalse(item["kwargs"]["relative"])
+        self.assertEqual(items.folder(item), "cell1")
+
+    def test_qs_rules(self):
+        # The same refusals as qs's refuses_what_the_scan_cannot_take.
+        for args, kw in [(("chi", 0, 1, 2, 1), {}), (("th", 0, 1, 2, 1), {"det": "pd"}),
+                         (("th", 0, 1, 0, 1), {}), (("th", 0, 1, 2.5, 1), {}), (("th", 0, 1, 2, 0), {}),
+                         (("th", 0, 1, 2, -1), {}), (("th", "x", 1, 2, 1), {}), (("th", 0, math.inf, 2, 1), {})]:
+            with self.assertRaises(Invalid, msg=repr((args, kw))):
+                items.step_scan(*args, **kw)
+
+    def test_detectors_are_qs_channels(self):
+        with open(__file__.replace("gui/tests/test_items.py", "qs/src/devices.rs")) as f:
+            self.assertIn('pub const CHANNELS: [&str; 4] = ["sec", "icxrd", "det", "ic1"];', f.read())
+        self.assertEqual(items.DETECTORS, ("sec", "icxrd", "det", "ic1"))
+
+
 if __name__ == "__main__":
     unittest.main()

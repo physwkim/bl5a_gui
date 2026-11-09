@@ -38,8 +38,8 @@ INSTRUCTIONS = """BL5A beamline (PLS-II 5A): the BL5A GUI's controls. bl5a-qs ru
 plans one at a time; SPEC moves the motors and takes the mar345 frames;
 bl5a-integrator integrates each frame into its series' stack.
 - Start with `status`: what runs, and `allowed`, the actions open now.
-- Plans run only from the queue: queue_alignment, queue_mar_series or
-  queue_insitu, then queue_start.
+- Plans run only from the queue: queue_alignment, queue_scan,
+  queue_mar_series or queue_insitu, then queue_start.
 - tweak and spec_command need SPEC free (status.allowed.spec): qs idle with
   nothing running, SPEC connected and idle.
 - messages, spec_log and commands are logs: pass `since` = the `last` the
@@ -849,6 +849,24 @@ def build(bl):
         align_film (thin film: align_in.mac's scans). The GUI's Alignment
         buttons."""
         return out(bl.add([items.align("align_" + kind, series)], data_folder))
+
+    @tool()
+    def queue_scan(motor: Literal[config.MOTORS],
+                   start: Annotated[float, Field(description="first point; an offset when relative")],
+                   finish: Annotated[float, Field(description="last point; an offset when relative")],
+                   intervals: Annotated[int, Field(ge=1, description="steps; the scan takes intervals + 1 "
+                                                                     "points")],
+                   time: Annotated[float, Field(gt=0, description="seconds counted at each point")],
+                   relative: Annotated[bool, Field(description="lup: offsets from where the motor is, and "
+                                                               "back there after; false: ascan")] = True,
+                   det: Literal[items.DETECTORS] = "det",
+                   series: Annotated[str | None, SERIES] = None,
+                   data_folder: Annotated[str | None, DATA_FOLDER] = None):
+        """Queue one step scan: lup (relative) or ascan of a motor, counting
+        at each point. The GUI's Scan form; it draws in the Scan tab and goes
+        to the series' SPEC file."""
+        item = items.step_scan(motor, start, finish, intervals, time, relative=relative, det=det, series=series)
+        return out(bl.add([item], data_folder))
 
     @tool()
     def queue_mar_series(name: Annotated[str, Field(description="mar345 file name: 1-27 characters, no spaces "

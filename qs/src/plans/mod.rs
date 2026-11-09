@@ -1,6 +1,7 @@
-//! The four queue items, one per macro of the two flows: `align_coin`
+//! The queue items, one per macro of the two flows: `align_coin`
 //! (coin_align), `mar_series` (mymar1, mymar), `align_film`
-//! (align_in.mac) and `insitu_step` (a step of myinsitu, then mymar_in).
+//! (align_in.mac) and `insitu_step` (a step of myinsitu, then mymar_in);
+//! and `step_scan`, one ascan/lup of the GUI's scan form.
 //! Each is one run; its scans are runs of their own ([`crate::scan`]).
 //! Besides the scans a plan records the SPEC commands it sent
 //! ("commands"), each alignment scan's outcome ("stages") and each
@@ -9,6 +10,7 @@
 mod align;
 mod args;
 mod mar;
+mod scan;
 
 use std::collections::HashMap;
 use std::path::Path;
@@ -411,6 +413,7 @@ impl<'a> Ops<'a> {
 pub fn register_all(reg: &mut Registry, devices: &Devices, root: &Path) {
     align::register(reg, devices, root);
     mar::register(reg, devices, root);
+    scan::register(reg, devices, root);
 }
 
 #[cfg(test)]
