@@ -278,7 +278,7 @@ The Battery form queues `mar_series`: SPEC's `mymar1` (one frame) or
 | Texpo | seconds 1 to 20, or a negative number of monitor counts | default 2 |
 | N | whole number, at least 1 | Repeat only: the number of frames |
 | Ti [min] | more than 2.5 | Repeat only: from one frame's start to the next |
-| Geometry | `standard`, `high_q_asymm`, `low_q_symmetric` | mymar's mar345 positions, below |
+| Geometry | `standard`, `high_q_asymm`, `low_q_symmetric` | Repeat only: mymar's mar345 positions, below; Single shot leaves the mar where it stands |
 | Series | a folder name ([Data](#data)) | the data folder and stack the frames go to; empty means the file name |
 
 ![Repeat: twelve frames, ten minutes apart](img/battery-repeat.png)
@@ -300,13 +300,13 @@ box that names the field and the rule. Then the GUI asks:
 `mar_ip7` refuses the upward geometry below 80° ("Two Theta Angle is too
 low for UPWARD Geometry."). In the simulation the plan then fails with
 that message; this has not been tried against the real SPEC. While the
-queue is idle you can type `umv tth 81` in the SPEC console. bl5a-sim
+queue is idle you can type `umv tth 83` in the SPEC console. bl5a-sim
 does not model `umv`; there, set tth's step and click ▶ instead.
 
 What a `mar_series` does, in order:
 
 1. `mar345closeshutter`, `scell` to 0, `counters 2 3`, `fi 0 1 0 0`,
-   `ic_range 4`, a 2 s wait, `mar_ip7 <geometry>`, `scell` to 0.
+   `ic_range 4`, a 2 s wait, `mar_ip7 <geometry>` (Repeat only), `scell` to 0.
 2. For each frame: the file name goes to the mar345 IOC,
    `mar345openshutter`, the count (in pieces of at most 429 s, or one
    monitor count), `mar345closeshutter`, `exp_condition`, the plate
@@ -722,7 +722,7 @@ from bl5a-qs and the integrator. A request bl5a-qs refuses also opens a
    (for example the cell's name) and click **Queue**.
 2. Click **Start** in the queue. The Scan tab draws the sy and shold fly
    scans; the history gets a row with the sy and shold the run left.
-3. With the queue idle, type `umv tth 81` in the SPEC console.
+3. With the queue idle, type `umv tth 83` in the SPEC console.
 4. On the **Battery** form: a file name, Texpo, **Repeat** with N and
    Ti (or **Single shot**), the geometry and the same series, so the
    frames go to the alignment's folder. **Add to queue**, answer **Yes**
@@ -809,7 +809,7 @@ The rules are the GUI's:
 As on the Battery form, move tth to 80° or more before a standard
 `queue_mar_series` ([Battery measurements](#battery-measurements)); a
 thin-film alignment leaves it near 1.2. Use `tweak`, or `spec_command`
-with `umv tth 81` at the beamline.
+with `umv tth 83` at the beamline.
 
 ## When something is wrong
 

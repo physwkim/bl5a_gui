@@ -40,7 +40,8 @@ struct Series {
 
 /// mymar: `n` frames, frame `i` from `i·Ti` after the first. Once set up
 /// it waits only between frames, so a deferred pause lands before the next
-/// frame, never after it.
+/// frame, never after it. mymar1 (n = 1) takes its frame with the mar
+/// where it stands: no `mar_ip7`.
 async fn series(ops: &Ops<'_>, s: &Series) -> Step {
     ops.spec("mar345closeshutter").await?;
     ops.umv(&[("scell", 0.0)]).await?;
@@ -49,7 +50,9 @@ async fn series(ops: &Ops<'_>, s: &Series) -> Step {
     ops.spec("fi 0 1 0 0").await?;
     ops.spec("ic_range 4").await?;
     ops.sleep(SETTLE).await?;
-    ops.spec(&format!("mar_ip7 {}", s.geometry)).await?;
+    if s.n > 1 {
+        ops.spec(&format!("mar_ip7 {}", s.geometry)).await?;
+    }
     ops.umv(&[("scell", 0.0)]).await?;
     ops.between_frames(SETTLE).await?;
     let t0 = Instant::now();
@@ -262,7 +265,8 @@ fn register_series(reg: &mut Registry, devices: &Devices, root: &Path) {
         factory,
         PlanMeta {
             description: Some(
-                "mymar (n = 1: mymar1): n mar345 frames, one every ti minutes.".into(),
+                "mymar (n = 1: mymar1, the mar left where it stands): n mar345 frames, one every ti minutes."
+                    .into(),
             ),
             parameters: vec![
                 param("name", "str", "File name: 1 to 27 characters, no spaces."),
