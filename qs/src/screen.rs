@@ -199,10 +199,14 @@ impl Bins {
     }
 
     /// How much the scan changes: the range of the bins as a fraction of
-    /// the largest, and in the noise of a bin.
+    /// the largest, and in the noise of a bin. Bins that do not change
+    /// change by nothing, also where the largest and the noise are zero.
     fn contrast(&self) -> (f64, f64) {
         let top = self.means.iter().copied().fold(f64::NEG_INFINITY, f64::max);
         let range = top - self.means.iter().copied().fold(f64::INFINITY, f64::min);
+        if range == 0.0 {
+            return (0.0, 0.0);
+        }
         (range / top, range / self.sigma)
     }
 
@@ -411,6 +415,17 @@ mod tests {
         let (part, snr) = Bins::of(&hampel(&low).0).contrast();
         assert!(part >= MIN_CONTRAST && snr < MIN_SNR, "{part} {snr}");
         assert!(fails(&x, &low, Pick::Edge).starts_with("no edge visible"));
+    }
+
+    /// A detector that counts nothing: no noise and no maximum to take a
+    /// fraction of.
+    #[test]
+    fn zero_scan_changes_by_nothing() {
+        let x = grid(0.0, 1.0, 5);
+        assert_eq!(
+            fails(&x, &[0.0; 5], Pick::Peak(Stat::Cen)),
+            "no peak visible: the scan changes by 0% of its maximum, 0.0 times its noise"
+        );
     }
 
     #[test]
