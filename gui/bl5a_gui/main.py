@@ -458,6 +458,7 @@ class MainWindow(qt.QMainWindow):
 
 def parse(argv):
     p = argparse.ArgumentParser(prog="bl5a-gui", description=__doc__.splitlines()[0])
+    p.add_argument("--font-pt", type=int, default=config.FONT_PT, help="the font size in points (%(default)s)")
     return config.arguments(p).parse_args(argv)
 
 
@@ -465,6 +466,7 @@ def main(argv=None):
     args = parse(sys.argv[1:] if argv is None else argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
     app = qt.QApplication.instance() or qt.QApplication(sys.argv[:1])
+    app.setFont(qt.QFont(config.FONT, args.font_pt))
     w = MainWindow(args)
     w.show()
     return app.exec()

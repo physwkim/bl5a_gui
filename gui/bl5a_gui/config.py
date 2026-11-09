@@ -8,6 +8,13 @@ INTEGRATOR_REP = "tcp://localhost:60735"
 INTEGRATOR_PUB = "tcp://localhost:60745"
 USER = "bl5a"
 
+# The GUI's font, set on the application in main(). Without it Qt takes
+# the desktop's: in a KDE session (XDG_CURRENT_DESKTOP=KDE) kdeglobals'
+# general font, 18 pt at the beamline, from the shortcut, and 9 pt from
+# a terminal; the panels are laid out for one size.
+FONT = "Noto Sans"
+FONT_PT = 12
+
 # The GUI's saved fields (QSettings organization, application); the MCP
 # server reads the Data folder from it too.
 SETTINGS = ("bl5a", "bl5a-gui")

@@ -4,4 +4,4 @@
 set -a
 . "$HOME/.config/bl5a/bl5a.env"
 set +a
-exec "$BL5A_PYTHON" -I "$(dirname "$0")/../gui/run_gui.py" "$@"
+exec "$BL5A_PYTHON" -I "$(dirname "$0")/../gui/run_gui.py" ${BL5A_FONT_PT:+--font-pt "$BL5A_FONT_PT"} "$@"

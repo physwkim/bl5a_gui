@@ -135,6 +135,7 @@ only `KEY=value` lines: a value with spaces in double quotes, no
 | `BL5A_DATA` | bl5a-qs `--data-root`, bl5a-integrator `--root` | the data root (section 4.5) |
 | `BL5A_PONI` | bl5a-integrator `--poni` | the PONI it starts with (section 4.6) |
 | `BL5A_PYTHON` | the GUI and the MCP server | written by `install.sh` |
+| `BL5A_FONT_PT` | the GUI | its font size in points, 12 when unset |
 | `EPICS_CA_*` | all of them | the site's Channel Access settings, if any |
 
 `~/.config/bl5a/spec-ioc.env` and `mar345-ioc.env`, when they exist, are
