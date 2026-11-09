@@ -40,7 +40,7 @@ the integrator, so it shows every stack it holds.
 | Area | What is in it |
 | --- | --- |
 | Top | the View menu, the run buttons (Pause, Resume, Stop, Abort, Stop all) and the status line |
-| Left | the Motors and Setup panes, as tabs; Setup holds the Data and Integration boxes, the Alignment box, the Battery, In-situ and Scan forms |
+| Left | the Setup and Motors panes, as tabs; Setup holds the Data and Integration boxes, the Alignment box, the Battery, In-situ and Scan forms |
 | Centre | the Scan, Image and Stack tabs |
 | Right | the Queue, the Stages of the running alignment, the Alignment history |
 | Bottom | the SPEC console, the Commands the plans sent, the GUI's Messages, as tabs |

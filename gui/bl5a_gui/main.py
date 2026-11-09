@@ -25,7 +25,7 @@ STOP_ALL = config.SPEC + "Cmd:Abort"
 # Where the default layout docks each pane, in order, and whether the
 # panes of an area share it as tabs (the first in front) or stack.
 PANES = (
-    (qt.Qt.LeftDockWidgetArea, True, ("motors", "setup")),
+    (qt.Qt.LeftDockWidgetArea, True, ("setup", "motors")),
     (qt.Qt.RightDockWidgetArea, False, ("queue", "stages", "history")),
     (qt.Qt.BottomDockWidgetArea, True, ("spec", "commands", "messages")),
 )

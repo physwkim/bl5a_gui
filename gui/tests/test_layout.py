@@ -57,6 +57,8 @@ class LayoutTest(unittest.TestCase):
         self.assertFalse(w.panes["history"].isVisible())
         w.resetLayoutAct.trigger()
         self.app.processEvents()
+        self.app.sendPostedEvents(None, qt.QEvent.DeferredDelete)  # the tab bars the reset retired
+        fronts = [b.tabText(b.currentIndex()) for b in w.findChildren(qt.QTabBar) if b.parent() is w]
         for area, tabbed, names in main.PANES:
             panes = [w.panes[name] for name in names]
             for pane in panes:
@@ -64,6 +66,8 @@ class LayoutTest(unittest.TestCase):
                 self.assertEqual(w.dockWidgetArea(pane), area, pane.objectName())
                 self.assertFalse(pane.isHidden(), pane.objectName())
             self.assertEqual(w.tabifiedDockWidgets(panes[0]), panes[1:] if tabbed else [], names)
+            if tabbed:
+                self.assertIn(panes[0].windowTitle(), fronts, "the first pane is the tab in front")
 
     def test_menus_hold_the_panes_not_the_toolbars(self):
         w = self.window()
