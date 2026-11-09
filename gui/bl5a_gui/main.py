@@ -1,6 +1,8 @@
-"""The BL5A main window: status line; motors, alignment and the forms on
-the left; scan, image and stack tabs in the centre; queue, stages and
-alignment history on the right; SPEC, commands and messages below."""
+"""The BL5A main window: run buttons and status line on top; the scan,
+image and stack tabs in the centre; around them panes the operator can
+move, float, close and resize: motors and the forms on the left; queue,
+stages and alignment history on the right; SPEC, commands and messages
+below."""
 
 import argparse
 import html
@@ -20,12 +22,22 @@ from .tables import HistoryTable, QueueTable, StagesTable
 STOP_ALL = config.SPEC + "Cmd:Abort"
 
 
-def _titled(title, widget):
-    box = qt.QGroupBox(title)
-    layout = qt.QVBoxLayout(box)
-    layout.setContentsMargins(4, 4, 4, 4)
-    layout.addWidget(widget)
-    return box
+# Where the default layout docks each pane, in order.
+PANES = (
+    (qt.Qt.LeftDockWidgetArea, ("motors", "setup")),
+    (qt.Qt.RightDockWidgetArea, ("queue", "stages", "history")),
+    (qt.Qt.BottomDockWidgetArea, ("spec", "commands", "messages")),
+)
+
+
+def _scrolled(widget):
+    # A pane narrower or shorter than its contents scrolls them, so no
+    # pane's contents stop the one beside it from growing.
+    area = qt.QScrollArea()
+    area.setWidgetResizable(True)
+    area.setFrameShape(qt.QFrame.NoFrame)
+    area.setWidget(widget)
+    return area
 
 
 class MainWindow(qt.QMainWindow):
@@ -58,17 +70,13 @@ class MainWindow(qt.QMainWindow):
         forms.addTab(self.battery, "Battery")
         forms.addTab(self.insitu, "In-situ")
         forms.addTab(self.scanForm, "Scan")
-        left = qt.QWidget()
-        leftLayout = qt.QVBoxLayout(left)
-        leftLayout.setContentsMargins(0, 0, 0, 0)
-        leftLayout.addWidget(self.motors)
-        leftLayout.addWidget(self.data)
-        leftLayout.addWidget(self.integration)
-        leftLayout.addWidget(self.align)
-        leftLayout.addWidget(forms, 1)
-        leftScroll = qt.QScrollArea()
-        leftScroll.setWidgetResizable(True)
-        leftScroll.setWidget(left)
+        setup = qt.QWidget()
+        setupLayout = qt.QVBoxLayout(setup)
+        setupLayout.setContentsMargins(0, 0, 0, 0)
+        setupLayout.addWidget(self.data)
+        setupLayout.addWidget(self.integration)
+        setupLayout.addWidget(self.align)
+        setupLayout.addWidget(forms, 1)
 
         self.scanTab = ScanTab()
         self.imageTab = ImageTab()
@@ -78,42 +86,30 @@ class MainWindow(qt.QMainWindow):
         centre.addTab(self.imageTab, "Image")
         centre.addTab(self.stackTab, "Stack")
 
+        self.setCentralWidget(_scrolled(centre))
+
         self.queueView = QueueTable()
         self.stages = StagesTable()
         self.history = HistoryTable()
-        self.stagesBox = _titled("Stages", self.stages)
-        right = qt.QSplitter(qt.Qt.Vertical)
-        right.addWidget(self.queueView)
-        right.addWidget(self.stagesBox)
-        right.addWidget(_titled("Alignment history", self.history))
-
         self.console = SpecConsole(self.pvs)
         self.commandsView = CommandsView()
         self.messages = MessagesView()
-        bottom = qt.QTabWidget()
-        bottom.addTab(self.console, "SPEC")
-        bottom.addTab(self.commandsView, "Commands")
-        bottom.addTab(self.messages, "Messages")
 
-        across = qt.QSplitter(qt.Qt.Horizontal)
-        across.addWidget(leftScroll)
-        across.addWidget(centre)
-        across.addWidget(right)
-        across.setStretchFactor(1, 1)
-        across.setSizes([430, 900, 520])
-        down = qt.QSplitter(qt.Qt.Vertical)
-        down.addWidget(across)
-        down.addWidget(bottom)
-        down.setStretchFactor(0, 1)
-        down.setSizes([760, 200])
-        central = qt.QWidget()
-        layout = qt.QVBoxLayout(central)
-        layout.setContentsMargins(4, 0, 4, 4)
-        layout.addWidget(self.status)
-        layout.addWidget(down, 1)
-        self.setCentralWidget(central)
+        self.setDockOptions(self.dockOptions() | qt.QMainWindow.AllowNestedDocks)
+        self.setTabPosition(qt.Qt.AllDockWidgetAreas, qt.QTabWidget.North)
+        self.panes = {}
+        for name, title, widget in (
+                ("motors", "Motors", self.motors), ("setup", "Setup", setup),
+                ("queue", "Queue", self.queueView), ("stages", self.stages.caption, self.stages),
+                ("history", "Alignment history", self.history), ("spec", "SPEC", self.console),
+                ("commands", "Commands", self.commandsView), ("messages", "Messages", self.messages)):
+            pane = qt.QDockWidget(title, self)
+            pane.setObjectName(name)  # its key in saveState
+            pane.setWidget(_scrolled(widget))
+            self.panes[name] = pane
 
         bar = self.addToolBar("Run")
+        bar.setObjectName("run")
         bar.setMovable(False)
         self.pauseAct = bar.addAction("Pause")
         self.pauseAct.setToolTip("Pause the running plan now (re_pause immediate)")
@@ -134,6 +130,20 @@ class MainWindow(qt.QMainWindow):
                                 "the running or paused plan. Always live; does not ask.".format(STOP_ALL))
         bar.addWidget(self.stopAll)
         self.stopAll.clicked.connect(self._stopAll)
+        self.addToolBarBreak()
+        line = self.addToolBar("Status")
+        line.setObjectName("status")
+        line.setMovable(False)
+        self.status.setSizePolicy(qt.QSizePolicy.Expanding, qt.QSizePolicy.Preferred)
+        line.addWidget(self.status)
+
+        self.resetLayoutAct = qt.QAction("Reset layout", self)
+        self.resetLayoutAct.setToolTip("Every pane shown and back where a first start puts it")
+        self.resetLayoutAct.triggered.connect(self.defaultLayout)
+        self._view(self.menuBar().addMenu("View"))
+        self.resize(1850, 1000)
+        self.defaultLayout()
+        self._restoreLayout()
 
         # -- documents -------------------------------------------------
         self.docs = docs.Documents(
@@ -188,6 +198,50 @@ class MainWindow(qt.QMainWindow):
         self._gate()
         self.poller.start()
         self.stackTab.reload()
+
+    # -- layout --------------------------------------------------------
+    def defaultLayout(self):
+        """Every pane shown and docked where a first start puts it."""
+        for area, names in PANES:
+            for name in names:
+                pane = self.panes[name]
+                pane.setFloating(False)
+                self.addDockWidget(area, pane)
+                pane.show()
+        spec, commands, messages = (self.panes[n] for n in ("spec", "commands", "messages"))
+        self.tabifyDockWidget(spec, commands)
+        self.tabifyDockWidget(commands, messages)
+        spec.raise_()
+        self.resizeDocks([self.panes["motors"], self.panes["queue"]],
+                         [430, self.queueView.minimumSizeHint().width()], qt.Qt.Horizontal)
+        self.resizeDocks([self.panes["motors"], self.panes["spec"]],
+                         [self.panes["motors"].sizeHint().height(), 200], qt.Qt.Vertical)
+
+    def _view(self, menu):
+        for pane in self.panes.values():
+            menu.addAction(pane.toggleViewAction())
+        menu.addSeparator()
+        menu.addAction(self.resetLayoutAct)
+
+    def createPopupMenu(self):
+        """The View menu, also on a right click: it lists no toolbar, so
+        Stop all cannot be hidden and stay hidden in the saved layout."""
+        menu = qt.QMenu(self)
+        self._view(menu)
+        return menu
+
+    def _restoreLayout(self):
+        s = qt.QSettings(*config.SETTINGS)
+        geometry, state = s.value("window/geometry"), s.value("window/state")
+        if geometry is not None:
+            self.restoreGeometry(geometry)
+        if state is not None:
+            self.restoreState(state)
+
+    def _saveLayout(self):
+        s = qt.QSettings(*config.SETTINGS)
+        s.setValue("window/geometry", self.saveGeometry())
+        s.setValue("window/state", self.saveState())
 
     # -- qs ------------------------------------------------------------
     def run(self, label, fn, *args, **kwargs):
@@ -338,7 +392,7 @@ class MainWindow(qt.QMainWindow):
         self.messages.add("{} started ({})".format(run.plan, run.series))
         if run.plan in docs.ALIGNING:
             self.stages.start(run)
-            self.stagesBox.setTitle(self.stages.caption)
+            self.panes["stages"].setWindowTitle(self.stages.caption)
 
     def _runStop(self, run, row):
         if row is not None:
@@ -394,6 +448,7 @@ class MainWindow(qt.QMainWindow):
         if not self.align.editor.discard_ok():
             event.ignore()
             return
+        self._saveLayout()
         self.poller.stop()
         self.commands.stop()
         self.documents.stop()
@@ -411,6 +466,5 @@ def main(argv=None):
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
     app = qt.QApplication.instance() or qt.QApplication(sys.argv[:1])
     w = MainWindow(args)
-    w.resize(1850, 1000)
     w.show()
     return app.exec()

@@ -39,13 +39,23 @@ the integrator, so it shows every stack it holds.
 
 | Area | What is in it |
 | --- | --- |
-| Top | the run buttons (Pause, Resume, Stop, Abort, Stop all) and the status line |
-| Left | motors, the Data and Integration boxes, the Alignment box, the Battery, In-situ and Scan forms |
+| Top | the View menu, the run buttons (Pause, Resume, Stop, Abort, Stop all) and the status line |
+| Left | the Motors pane; the Setup pane: the Data and Integration boxes, the Alignment box, the Battery, In-situ and Scan forms |
 | Centre | the Scan, Image and Stack tabs |
-| Right | the queue, the stages of the running alignment, the alignment history |
-| Bottom | the SPEC console, the Commands the plans sent, the GUI's Messages |
+| Right | the Queue, the Stages of the running alignment, the Alignment history |
+| Bottom | the SPEC console, the Commands the plans sent, the GUI's Messages, as tabs |
 
-The panes are split by handles you can drag.
+Every pane around the centre tabs has a title bar. Drag the edge
+between two panes, or between a pane and the centre tabs, to resize
+them; a pane smaller than its contents scrolls them. Drag a title bar
+to another side, or onto another pane to share its place as a tab. The
+button left of × on the title bar, or a double click on the title bar,
+floats the pane as a window of its own, which can go to another screen;
+the same again docks it back. × closes the pane. The **View** menu,
+also on a right click on a docked pane's title bar, shows a closed pane
+again, and **Reset layout** puts every pane back where the first start
+puts it. The next start opens the window at the size and layout it had
+when closed, kept in `~/.config/bl5a/bl5a-gui.conf`.
 
 ### Who drives SPEC
 

@@ -77,7 +77,7 @@ class MotorsPanel(qt.QGroupBox):
     move; the buttons are live only while nothing else drives SPEC."""
 
     def __init__(self, pvs, parent=None):
-        super().__init__("Motors", parent)
+        super().__init__(parent)  # its pane is titled Motors
         self.pvs = pvs
         self.rows = {}
         grid = qt.QGridLayout(self)
@@ -122,6 +122,7 @@ class MotorsPanel(qt.QGroupBox):
         buttons.addWidget(self.alignPos)
         buttons.addWidget(self.measurePos)
         grid.addLayout(buttons, last, 0, 1, 6)
+        grid.setRowStretch(last + 1, 1)  # a pane taller than the rows: the space goes below them
         pvs.changed.connect(self._changed)
         pvs.connected.connect(self._connected)
         self.setAllowed(False)
