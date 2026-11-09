@@ -28,8 +28,8 @@ options:
 | `--user` | `bl5a` | the name in the queue's User column |
 
 You can close the GUI at any time. The queue keeps running in bl5a-qs and
-the stacks stay with the integrator. A new window starts with empty Scan,
-Stages, Alignment history, Commands and Messages panes: they are filled
+the stacks stay with the integrator. A new window starts with an empty
+Alignment tab and empty Commands and Messages panes: they are filled
 from what the plans report while the window is open. The Stack tab asks
 the integrator, so it shows every stack it holds.
 
@@ -41,14 +41,18 @@ the integrator, so it shows every stack it holds.
 | --- | --- |
 | Top | the View menu, the run buttons (Pause, Resume, Stop, Abort, Stop all) and the status line |
 | Left | the Setup and Motors panes, as tabs; Setup holds the Data and Integration boxes, the Alignment box, the Battery, In-situ and Scan forms |
-| Centre | the Scan, Image and Stack tabs |
-| Right | the Queue, the Stages of the running alignment, the Alignment history |
+| Centre | the Alignment tab: the scan plot, with the Stages of the running alignment and the Alignment history below it; the Image and Stack tabs |
+| Right | the Queue |
 | Bottom | the SPEC console, the Commands the plans sent, the GUI's Messages, as tabs |
 
-Every pane around the centre tabs has a title bar. Drag the edge
-between two panes, or between a pane and the centre tabs, to resize
-them; a pane smaller than its contents scrolls them. Drag a title bar
-to another side, or onto another pane to share its place as a tab. The
+The Stages and Alignment history panes belong to the Alignment tab, so
+the Image and Stack tabs have the whole centre to themselves.
+
+Every pane has a title bar. Drag the edge between two panes, or between
+a pane and the centre tabs or the scan plot, to resize them; a pane
+smaller than its contents scrolls them. Drag a title bar to another
+side, or onto another pane to share its place as a tab; the Stages and
+Alignment history panes move only inside the Alignment tab. The
 button left of × on the title bar, or a double click on the title bar,
 floats the pane as a window of its own, which can go to another screen;
 the same again docks it back. × closes the pane. The **View** menu,
@@ -527,7 +531,7 @@ One row per finished run that aligned:
 SPEC's dial position is not published, so the absolute offset is not
 known to the GUI.
 
-## Scan tab
+## Alignment tab
 
 ![A scan being drawn](img/scan-live.png)
 
@@ -714,8 +718,9 @@ from bl5a-qs and the integrator. A request bl5a-qs refuses also opens a
    click **Coin cell** (or **Load…** a sequence of your own); its blocks
    open in the Blocks window, to change or just close. Type a series
    (for example the cell's name) and click **Queue**.
-2. Click **Start** in the queue. The Scan tab draws the sy and shold fly
-   scans; the history gets a row with the sy and shold the run left.
+2. Click **Start** in the queue. The Alignment tab draws the sy and
+   shold fly scans; the history gets a row with the sy and shold the run
+   left.
 3. With the queue idle, type `umv tth 83` in the SPEC console.
 4. On the **Battery** form: a file name, Texpo, **Repeat** with N and
    Ti (or **Single shot**), the geometry and the same series, so the
@@ -737,7 +742,7 @@ from bl5a-qs and the integrator. A request bl5a-qs refuses also opens a
    wanted, align, the th list, texpo and the file name. Add the
    **Cooling row** last.
 3. **Queue rows**, then **Start**.
-4. Each row sets the temperature, aligns (Stages and Scan tabs) and takes
+4. Each row sets the temperature, aligns (Alignment tab) and takes
    its frames (Image and Stack tabs). The history gets a row per aligned
    step with its T.
 5. On the **Stack** tab, pick one th (for example `th 0.13`) to compare
@@ -762,7 +767,7 @@ scan find?".
 | `status` | the queue's and SPEC's state, and `allowed`: the actions open now | status line; which buttons are live |
 | `queue`, `history` | the waiting items; the finished ones with their exit status | Queue |
 | `motors` | position, step and unit of each motor | Motors |
-| `scans`, `scan`, `alignment` | the scans with their peak values; the stages and the alignment history | Scan tab, Stages, Alignment history |
+| `scans`, `scan`, `alignment` | the scans with their peak values; the stages and the alignment history | Alignment tab |
 | `messages`, `spec_log`, `commands` | the three logs | Messages, SPEC, Commands |
 | `frame_image` | the last frame, or a named one, as a picture | Image tab |
 | `integration`, `stacks`, `stack` | the integrator's PONI and npt; the stacks; one stack's rows | Integration, Stack tab |

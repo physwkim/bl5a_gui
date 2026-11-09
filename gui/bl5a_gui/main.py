@@ -1,8 +1,8 @@
-"""The BL5A main window: run buttons and status line on top; the scan,
-image and stack tabs in the centre; around them panes the operator can
-move, float, close and resize: motors and the forms on the left; queue,
-stages and alignment history on the right; SPEC, commands and messages
-below."""
+"""The BL5A main window: run buttons and status line on top; the
+Alignment, Image and Stack tabs in the centre; panes the operator can
+move, float, close and resize: around the tabs motors and the forms on
+the left, the queue on the right, SPEC, commands and messages below; in
+the Alignment tab the stages and alignment history below its scan plot."""
 
 import argparse
 import html
@@ -22,13 +22,18 @@ from .tables import HistoryTable, QueueTable, StagesTable
 STOP_ALL = config.SPEC + "Cmd:Abort"
 
 
-# Where the default layout docks each pane, in order, and whether the
-# panes of an area share it as tabs (the first in front) or stack.
+# Where the default layout docks each pane, in order: in the window or
+# in the Alignment tab; and whether the panes of an area share it as
+# tabs (the first in front) or split it.
 PANES = (
-    (qt.Qt.LeftDockWidgetArea, True, ("setup", "motors")),
-    (qt.Qt.RightDockWidgetArea, False, ("queue", "stages", "history")),
-    (qt.Qt.BottomDockWidgetArea, True, ("spec", "commands", "messages")),
+    ("window", qt.Qt.LeftDockWidgetArea, True, ("setup", "motors")),
+    ("window", qt.Qt.RightDockWidgetArea, False, ("queue",)),
+    ("window", qt.Qt.BottomDockWidgetArea, True, ("spec", "commands", "messages")),
+    ("alignment", qt.Qt.BottomDockWidgetArea, False, ("stages", "history")),
 )
+# A saved layout of another version is not restored: the panes it
+# placed have moved since.
+LAYOUT = 1
 
 
 def _scrolled(widget):
@@ -39,6 +44,19 @@ def _scrolled(widget):
     area.setFrameShape(qt.QFrame.NoFrame)
     area.setWidget(widget)
     return area
+
+
+class _Page(qt.QMainWindow):
+    """A tab with panes of its own; a right click on their title bars
+    opens the window's View menu."""
+
+    def __init__(self, menu):
+        super().__init__()
+        self.setWindowFlags(qt.Qt.Widget)
+        self._menu = menu
+
+    def createPopupMenu(self):
+        return self._menu()
 
 
 class MainWindow(qt.QMainWindow):
@@ -82,12 +100,14 @@ class MainWindow(qt.QMainWindow):
         self.scanTab = ScanTab()
         self.imageTab = ImageTab()
         self.stackTab = StackTab(self.integrator)
-        centre = qt.QTabWidget()
-        centre.addTab(self.scanTab, "Scan")
-        centre.addTab(self.imageTab, "Image")
-        centre.addTab(self.stackTab, "Stack")
+        self.alignment = _Page(self.createPopupMenu)  # the scan plot and the panes of an alignment
+        self.alignment.setCentralWidget(self.scanTab)
+        self.tabs = qt.QTabWidget()
+        self.tabs.addTab(self.alignment, "Alignment")
+        self.tabs.addTab(self.imageTab, "Image")
+        self.tabs.addTab(self.stackTab, "Stack")
 
-        self.setCentralWidget(_scrolled(centre))
+        self.setCentralWidget(_scrolled(self.tabs))
 
         self.queueView = QueueTable()
         self.stages = StagesTable()
@@ -96,15 +116,18 @@ class MainWindow(qt.QMainWindow):
         self.commandsView = CommandsView()
         self.messages = MessagesView()
 
-        self.setDockOptions(self.dockOptions() | qt.QMainWindow.AllowNestedDocks)
-        self.setTabPosition(qt.Qt.AllDockWidgetAreas, qt.QTabWidget.North)
+        self.hosts = {"window": self, "alignment": self.alignment}
+        for host in self.hosts.values():
+            host.setDockOptions(host.dockOptions() | qt.QMainWindow.AllowNestedDocks)
+            host.setTabPosition(qt.Qt.AllDockWidgetAreas, qt.QTabWidget.North)
+        hostOf = {name: self.hosts[host] for host, _, _, names in PANES for name in names}
         self.panes = {}
         for name, title, widget in (
                 ("motors", "Motors", self.motors), ("setup", "Setup", setup),
                 ("queue", "Queue", self.queueView), ("stages", self.stages.caption, self.stages),
                 ("history", "Alignment history", self.history), ("spec", "SPEC", self.console),
                 ("commands", "Commands", self.commandsView), ("messages", "Messages", self.messages)):
-            pane = qt.QDockWidget(title, self)
+            pane = qt.QDockWidget(title, hostOf[name])
             pane.setObjectName(name)  # its key in saveState
             pane.setWidget(_scrolled(widget))
             self.panes[name] = pane
@@ -203,19 +226,21 @@ class MainWindow(qt.QMainWindow):
     # -- layout --------------------------------------------------------
     def defaultLayout(self):
         """Every pane shown and docked where a first start puts it."""
-        for area, tabbed, names in PANES:
+        for host, area, tabbed, names in PANES:
+            host = self.hosts[host]
             for name in names:
                 pane = self.panes[name]
                 pane.setFloating(False)
-                self.addDockWidget(area, pane)
+                host.addDockWidget(area, pane)
                 pane.show()
             if tabbed:
                 for before, after in zip(names, names[1:]):
-                    self.tabifyDockWidget(self.panes[before], self.panes[after])
+                    host.tabifyDockWidget(self.panes[before], self.panes[after])
                 self.panes[names[0]].raise_()
         self.resizeDocks([self.panes["motors"], self.panes["queue"]],
                          [430, self.queueView.minimumSizeHint().width()], qt.Qt.Horizontal)
         self.resizeDocks([self.panes["spec"]], [200], qt.Qt.Vertical)
+        self.alignment.resizeDocks([self.panes["stages"]], [230], qt.Qt.Vertical)
 
     def _view(self, menu):
         for pane in self.panes.values():
@@ -232,16 +257,19 @@ class MainWindow(qt.QMainWindow):
 
     def _restoreLayout(self):
         s = qt.QSettings(*config.SETTINGS)
-        geometry, state = s.value("window/geometry"), s.value("window/state")
+        geometry = s.value("window/geometry")
         if geometry is not None:
             self.restoreGeometry(geometry)
-        if state is not None:
-            self.restoreState(state)
+        for key, host in self.hosts.items():
+            state = s.value(key + "/state")
+            if state is not None:
+                host.restoreState(state, LAYOUT)
 
     def _saveLayout(self):
         s = qt.QSettings(*config.SETTINGS)
         s.setValue("window/geometry", self.saveGeometry())
-        s.setValue("window/state", self.saveState())
+        for key, host in self.hosts.items():
+            s.setValue(key + "/state", host.saveState(LAYOUT))
 
     # -- qs ------------------------------------------------------------
     def run(self, label, fn, *args, **kwargs):

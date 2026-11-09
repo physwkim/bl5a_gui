@@ -1,6 +1,7 @@
 """The panes around the plots: each can shrink below its contents, the
 layout outlives the window, Reset layout brings back the first one, and
-no menu hides the run toolbar."""
+no menu hides the run toolbar. The alignment's panes are on the
+Alignment tab only."""
 
 import os
 import tempfile
@@ -58,24 +59,42 @@ class LayoutTest(unittest.TestCase):
         w.resetLayoutAct.trigger()
         self.app.processEvents()
         self.app.sendPostedEvents(None, qt.QEvent.DeferredDelete)  # the tab bars the reset retired
-        fronts = [b.tabText(b.currentIndex()) for b in w.findChildren(qt.QTabBar) if b.parent() is w]
-        for area, tabbed, names in main.PANES:
+        for host, area, tabbed, names in main.PANES:
+            host = w.hosts[host]
+            fronts = [b.tabText(b.currentIndex()) for b in host.findChildren(qt.QTabBar) if b.parent() is host]
             panes = [w.panes[name] for name in names]
             for pane in panes:
                 self.assertFalse(pane.isFloating(), pane.objectName())
-                self.assertEqual(w.dockWidgetArea(pane), area, pane.objectName())
+                self.assertEqual(host.dockWidgetArea(pane), area, pane.objectName())
                 self.assertFalse(pane.isHidden(), pane.objectName())
-            self.assertEqual(w.tabifiedDockWidgets(panes[0]), panes[1:] if tabbed else [], names)
+            self.assertEqual(host.tabifiedDockWidgets(panes[0]), panes[1:] if tabbed else [], names)
             if tabbed:
                 self.assertIn(panes[0].windowTitle(), fronts, "the first pane is the tab in front")
 
+    def test_a_layout_saved_before_the_tabs_is_not_restored(self):
+        w = self.window()
+        w.panes["queue"].setFloating(True)
+        qt.QSettings(*config.SETTINGS).setValue("window/state", w.saveState())  # as saved before LAYOUT
+        w = self.window()
+        self.assertFalse(w.panes["queue"].isFloating())
+
+    def test_the_alignment_panes_show_on_its_tab_only(self):
+        w = self.window()
+        alignment = [w.panes["stages"], w.panes["history"]]
+        for tab in (w.alignment, w.imageTab, w.stackTab, w.alignment):
+            w.tabs.setCurrentWidget(tab)
+            self.app.processEvents()
+            name = w.tabs.tabText(w.tabs.currentIndex())
+            self.assertEqual([p.isVisible() for p in alignment], [tab is w.alignment] * 2, name)
+
     def test_menus_hold_the_panes_not_the_toolbars(self):
         w = self.window()
-        actions = w.createPopupMenu().actions()
-        for bar in w.findChildren(qt.QToolBar):
-            self.assertNotIn(bar.toggleViewAction(), actions, bar.windowTitle())
-        self.assertEqual([a for a in actions if not a.isSeparator()],
-                         [p.toggleViewAction() for p in w.panes.values()] + [w.resetLayoutAct])
+        for host in w.hosts.values():
+            actions = host.createPopupMenu().actions()
+            for bar in w.findChildren(qt.QToolBar):
+                self.assertNotIn(bar.toggleViewAction(), actions, bar.windowTitle())
+            self.assertEqual([a for a in actions if not a.isSeparator()],
+                             [p.toggleViewAction() for p in w.panes.values()] + [w.resetLayoutAct])
 
 
 if __name__ == "__main__":

@@ -554,9 +554,9 @@ Do these in order and go on only when a step matches SPEC.
    being `p SCAN_D[0]`.
 6. **An alignment.** Queue Coin cell or Thin film for the sample on the
    stage. Compare each stage's CEN and FWHM in the GUI with SPEC's own
-   scan over the same range (the scan title in the Scan tab gives it) and
-   SPEC's `CEN`; a stage whose scan had a point replaced by the outlier
-   filter can differ ([usage.md](usage.md#before-a-stage-moves)).
+   scan over the same range (the scan title in the Alignment tab gives
+   it) and SPEC's `CEN`; a stage whose scan had a point replaced by the
+   outlier filter can differ ([usage.md](usage.md#before-a-stage-moves)).
    Compare an EDGE stage with where SPEC's scan falls through halfway
    between its maximum and its floor, not with SPEC's `CEN`.
 7. **A frame.** Start the integrator
