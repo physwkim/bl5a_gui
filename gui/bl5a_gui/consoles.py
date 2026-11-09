@@ -31,7 +31,7 @@ class SpecConsole(qt.QWidget):
     PV's tail between two updates shows as lines not shown; a command's own
     reply comes whole from Cmd:Reply."""
 
-    replied = qt.Signal()
+    replied = qt.Signal(object)  # None, or why the put of the command failed
 
     def __init__(self, pvs, parent=None):
         super().__init__(parent)
@@ -86,14 +86,18 @@ class SpecConsole(qt.QWidget):
         # it to this one.
         self.pvs.put(config.SPEC_CMD, config.spec_line(cmd), callback=self.replied.emit)
 
-    def _replied(self):
+    def _replied(self, error):
         cmd, self.pending = self.pending, None
-        status = self.pvs.get_text(config.SPEC + "Cmd:Status")
-        reply = self.pvs.get_text(config.SPEC + "Cmd:Reply")
-        if reply:
-            self.out.appendPlainText(reply.rstrip("\n"))
-        if status != "OK":
-            self.out.appendPlainText("{} {!r}: {}".format(stamp(), cmd, status or "no status"))
+        if error is not None:
+            # Cmd:Status and Cmd:Reply are a previous command's then.
+            self.out.appendPlainText("{} {!r}: {}".format(stamp(), cmd, error))
+        else:
+            status = self.pvs.get_text(config.SPEC + "Cmd:Status")
+            reply = self.pvs.get_text(config.SPEC + "Cmd:Reply")
+            if reply:
+                self.out.appendPlainText(reply.rstrip("\n"))
+            if status != "OK":
+                self.out.appendPlainText("{} {!r}: {}".format(stamp(), cmd, status or "no status"))
         self.entry.clear()
         self.setAllowed(self.allowed)
 

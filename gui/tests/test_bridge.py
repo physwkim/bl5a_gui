@@ -16,12 +16,12 @@ class FakePV:
         self.puts.append((value, wait, timeout))
 
 
-@pytest.mark.parametrize("pv, puts", [
-    (FakePV(), [("wa", True, None)]),
-    (FakePV(fails=CaTimeout("channel not found: fake", 80)), []),
-    (FakePV(fails=CaDisconnected("disconnected", 24)), []),
+@pytest.mark.parametrize("pv, puts, error", [
+    (FakePV(), [("wa", True, None)], None),
+    (FakePV(fails=CaTimeout("channel not found: fake", 80)), [], "channel not found: fake"),
+    (FakePV(fails=CaDisconnected("disconnected", 24)), [], "disconnected"),
 ])
-def test_put_callback_runs_once_the_put_completes_or_fails(pv, puts):
+def test_put_callback_runs_once_the_put_completes_or_fails(pv, puts, error):
     called = []
-    PVs._put_wait(pv, "wa", lambda: called.append(1))
-    assert called == [1] and pv.puts == puts
+    PVs._put_wait(pv, "wa", called.append)
+    assert called == [error] and pv.puts == puts

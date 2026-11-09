@@ -687,7 +687,8 @@ marks an IOC restart.
 The entry sends one SPEC command (Enter or **Send**) when the queue is
 idle (see [Who drives SPEC](#who-drives-spec)). The command is echoed as
 `HH:MM:SS SPEC> command`, followed by SPEC's reply. A command that does
-not end OK adds a line with its status. **^C** interrupts the command
+not end OK adds a line with its status; one that could not be written to
+SPEC, a line with why instead of a reply. **^C** interrupts the command
 sent from here; it never touches a plan's command.
 
 ![The commands the plans sent](img/commands.png)

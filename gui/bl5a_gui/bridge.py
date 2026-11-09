@@ -224,8 +224,8 @@ class PVs(qt.QObject):
         self.connected.emit(pvname, bool(conn))
 
     def put(self, name, value, callback=None):
-        """A put that does not wait; `callback()` (on a helper thread) at
-        completion, or once the put has failed, when given."""
+        """A put that does not wait; `callback(error)` (on a helper thread)
+        once it has ended, `error` None or why it failed, when given."""
         pv = self.watch(name)
         if callback is None:
             try:
@@ -240,12 +240,13 @@ class PVs(qt.QObject):
     def _put_wait(pv, value, callback):
         """The PV's connection_timeout bounds the connect; the completion
         waits as long as the record takes."""
+        error = None
         try:
             pv.put(value, wait=True, timeout=None)
-        except CaError as e:
+        except Exception as e:  # unclassified, the callback would take it for a completed put
+            error = e.args[0] if isinstance(e, CaError) else repr(e)
             logger.warning("%s: put %r: %s", pv.pvname, value, e)
-        finally:
-            callback()
+        callback(error)
 
     def get_text(self, name, timeout=1.0):
         try:
