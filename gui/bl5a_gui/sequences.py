@@ -13,7 +13,7 @@ import pathlib
 import tempfile
 import unicodedata
 
-from . import items
+from . import config, items
 from .items import Invalid
 
 HERE = pathlib.Path(__file__).resolve().parent / "templates"
@@ -36,11 +36,12 @@ def checked_name(text, field):
 
 
 def folder(root, user):
-    """Where `user`'s sequences are kept under the data folder `root`."""
+    """Where `user`'s sequences are kept under the data folder `root`; no
+    user (the panel's User box empty) is config.USER."""
     root = items.data_root(root)
     if root is None:
         raise Invalid("Data folder: not set; a user's sequences are kept in <data folder>/{}".format(FOLDER))
-    return pathlib.Path(root, FOLDER, checked_name(user, "user"))
+    return pathlib.Path(root, FOLDER, checked_name((user or "").strip() or config.USER, "User"))
 
 
 def _read(path, label):

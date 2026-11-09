@@ -3,7 +3,7 @@ import pathlib
 import tempfile
 import unittest
 
-from bl5a_gui import sequences
+from bl5a_gui import config, sequences
 from bl5a_gui.items import Invalid
 
 ERASE = [{"kind": "erase"}]
@@ -48,6 +48,15 @@ class SequencesTest(unittest.TestCase):
         with self.assertRaisesRegex(Invalid, "nor saved by kim"):
             sequences.get("my film", self.root, "kim")
 
+    def test_no_user_is_the_default_user(self):
+        for user in (None, "", "  "):
+            with self.subTest(user=user):
+                self.assertEqual(sequences.folder(self.root, user),
+                                 pathlib.Path(self.root, "alignments", config.USER))
+        path = sequences.save("mine", ERASE, self.root, "")
+        self.assertEqual(path.parent.name, config.USER)
+        self.assertEqual(sequences.users(self.root), [config.USER])
+
     def test_refused(self):
         with self.assertRaisesRegex(Invalid, "template's name"):
             sequences.save("Thin film", ERASE, self.root, "kim")
@@ -56,7 +65,7 @@ class SequencesTest(unittest.TestCase):
         for name in ("", " ", ".hidden", "a/b", "a\\b", "a\nb", "x" * 65):
             with self.subTest(name=name), self.assertRaisesRegex(Invalid, "^sequence: 1 to 64 characters"):
                 sequences.save(name, ERASE, self.root, "kim")
-        with self.assertRaisesRegex(Invalid, "^user: "):
+        with self.assertRaisesRegex(Invalid, "^User: "):
             sequences.save("ok", ERASE, self.root, "../x")
         with self.assertRaisesRegex(Invalid, "block 1 \\(wait\\): seconds is missing"):
             sequences.save("ok", [{"kind": "wait"}], self.root, "kim")

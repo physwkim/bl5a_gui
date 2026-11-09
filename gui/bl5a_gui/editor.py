@@ -58,7 +58,7 @@ class UserCombo(qt.QComboBox):
         super().__init__(parent)
         self.setEditable(True)
         self.setInsertPolicy(qt.QComboBox.NoInsert)
-        self.setEditText(source()[1])
+        self.setEditText(source()[1] or config.USER)
 
     def showPopup(self):
         text = self.currentText()

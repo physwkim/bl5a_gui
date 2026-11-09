@@ -348,7 +348,7 @@ own, [Blocks](#the-blocks-window).
 | --- | --- |
 | Coin cell, Thin film | loads that sequence's blocks and opens the Blocks window |
 | Load… | the same for one of the User's saved sequences, picked from its menu |
-| User | whose sequences Load…, Save and Delete use; type a name, or pick one that has saved sequences |
+| User | whose sequences Load…, Save and Delete use; type a name, or pick one that has saved sequences; empty: `bl5a` |
 | Blocks… | opens the Blocks window again |
 | Series | groups the runs in the alignment history, is stored with the run and names the data folder its scans go to; empty means each run stands on its own, its scans in the folder `align` |
 | Queue | queues the plan `align` with the blocks loaded, changed or not |
