@@ -411,9 +411,12 @@ class StackTab(qt.QWidget):
             self.series.setCurrentIndex(k)
             self._select()
         else:
+            # The shown stack with no rows held has a request from 0 out,
+            # whose reply may predate this row: ask again; _reply resumes
+            # the second reply from where the first ended.
             entry = self.data.get(path)
-            if entry is not None:
-                self.integrator.request("history", path=path, **{"from": len(entry["rows"])})
+            if entry is not None or path == self.current():
+                self.integrator.request("history", path=path, **{"from": len(entry["rows"]) if entry else 0})
 
     def _ths(self, entry):
         keep = self.th.currentText()

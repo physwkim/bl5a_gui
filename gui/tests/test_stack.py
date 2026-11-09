@@ -1,6 +1,7 @@
 """StackTab follows the rows as they are integrated, as ImageTab follows
 the frames: a row of another stack, listed or new, brings that stack up,
-unless Follow is off."""
+unless Follow is off. A row that lands while its stack's rows are on
+their way is not lost."""
 
 import unittest
 
@@ -16,6 +17,7 @@ class Integrator(qt.QObject):
     def __init__(self, stacks):
         super().__init__()
         self.stacks = stacks  # path -> rows
+        self.held = None  # replies made but not delivered, while holding
 
     def request(self, method, **params):
         if method == "stacks":
@@ -27,7 +29,15 @@ class Integrator(qt.QObject):
                     "frames": [{"th": 0.1}] * len(rows), "intensity": rows}
         else:
             return
-        self.reply.emit(method, body)
+        if self.held is not None:
+            self.held.append((method, body))
+        else:
+            self.reply.emit(method, body)
+
+    def release(self):
+        held, self.held = self.held, None
+        for method, body in held:
+            self.reply.emit(method, body)
 
     def row(self, path):
         self.stacks.setdefault(path, []).append([1.0, 1.0])
@@ -68,6 +78,13 @@ class StackTabTest(unittest.TestCase):
         self.assertEqual(self.shown(), ("/d/a.h5", 1))
         self.assertGreaterEqual(self.tab.series.findData("/d/c.h5"), 0, "the new stack is listed")
         self.integrator.row("/d/a.h5")
+        self.assertEqual(self.shown(), ("/d/a.h5", 2))
+
+    def test_a_row_while_the_rows_are_on_their_way(self):
+        self.integrator.held = []
+        self.tab.series.activated.emit(self.tab.series.currentIndex())
+        self.integrator.row("/d/a.h5")
+        self.integrator.release()
         self.assertEqual(self.shown(), ("/d/a.h5", 2))
 
 
