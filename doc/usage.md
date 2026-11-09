@@ -123,17 +123,17 @@ The queue's own **Stop** is different: it lets the running item finish
 and then stops the queue.
 
 The mar345's motors (`martran marz marsdd marshut marx ipbsx ipbsy`)
-move only with tth at 81 or above, and tth goes below 81 only with
+move only with tth at 83 or above, and tth goes below 83 only with
 martran at 1200 or above. A move from the GUI or a plan that would break
 this is refused and the SPEC log says why, for example `marz move
-refused: tth 1 is below 81`. The motor stays where it was, so a plan
+refused: tth 1 is below 83`. The motor stays where it was, so a plan
 fails (`martran stopped at 1234, not 1250: 16000 steps off`) and the MCP `tweak` returns
 an error. The motor's record has a MAJOR alarm until the motor next
 moves, and its setpoint goes back to the readback, so the next ◀ or ▶
 steps from where the motor is. SPEC's own moves (a macro, a command)
 cannot be refused: once one breaks the rule, spec-ioc sends SPEC a ^C,
 which stops every motor, and logs `interlock: …; sent ^C`. tth then
-stops a little below 81; move tth up before moving the mar.
+stops a little below 83; move tth up before moving the mar.
 
 ## Motors
 
