@@ -57,13 +57,13 @@ class LayoutTest(unittest.TestCase):
         self.assertFalse(w.panes["history"].isVisible())
         w.resetLayoutAct.trigger()
         self.app.processEvents()
-        for area, names in main.PANES:
-            for name in names:
-                pane = w.panes[name]
-                self.assertFalse(pane.isFloating(), name)
-                self.assertEqual(w.dockWidgetArea(pane), area, name)
-                self.assertFalse(pane.isHidden(), name)
-        self.assertEqual(w.tabifiedDockWidgets(w.panes["spec"]), [w.panes["commands"], w.panes["messages"]])
+        for area, tabbed, names in main.PANES:
+            panes = [w.panes[name] for name in names]
+            for pane in panes:
+                self.assertFalse(pane.isFloating(), pane.objectName())
+                self.assertEqual(w.dockWidgetArea(pane), area, pane.objectName())
+                self.assertFalse(pane.isHidden(), pane.objectName())
+            self.assertEqual(w.tabifiedDockWidgets(panes[0]), panes[1:] if tabbed else [], names)
 
     def test_menus_hold_the_panes_not_the_toolbars(self):
         w = self.window()

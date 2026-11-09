@@ -22,11 +22,12 @@ from .tables import HistoryTable, QueueTable, StagesTable
 STOP_ALL = config.SPEC + "Cmd:Abort"
 
 
-# Where the default layout docks each pane, in order.
+# Where the default layout docks each pane, in order, and whether the
+# panes of an area share it as tabs (the first in front) or stack.
 PANES = (
-    (qt.Qt.LeftDockWidgetArea, ("motors", "setup")),
-    (qt.Qt.RightDockWidgetArea, ("queue", "stages", "history")),
-    (qt.Qt.BottomDockWidgetArea, ("spec", "commands", "messages")),
+    (qt.Qt.LeftDockWidgetArea, True, ("motors", "setup")),
+    (qt.Qt.RightDockWidgetArea, False, ("queue", "stages", "history")),
+    (qt.Qt.BottomDockWidgetArea, True, ("spec", "commands", "messages")),
 )
 
 
@@ -202,20 +203,19 @@ class MainWindow(qt.QMainWindow):
     # -- layout --------------------------------------------------------
     def defaultLayout(self):
         """Every pane shown and docked where a first start puts it."""
-        for area, names in PANES:
+        for area, tabbed, names in PANES:
             for name in names:
                 pane = self.panes[name]
                 pane.setFloating(False)
                 self.addDockWidget(area, pane)
                 pane.show()
-        spec, commands, messages = (self.panes[n] for n in ("spec", "commands", "messages"))
-        self.tabifyDockWidget(spec, commands)
-        self.tabifyDockWidget(commands, messages)
-        spec.raise_()
+            if tabbed:
+                for before, after in zip(names, names[1:]):
+                    self.tabifyDockWidget(self.panes[before], self.panes[after])
+                self.panes[names[0]].raise_()
         self.resizeDocks([self.panes["motors"], self.panes["queue"]],
                          [430, self.queueView.minimumSizeHint().width()], qt.Qt.Horizontal)
-        self.resizeDocks([self.panes["motors"], self.panes["spec"]],
-                         [self.panes["motors"].sizeHint().height(), 200], qt.Qt.Vertical)
+        self.resizeDocks([self.panes["spec"]], [200], qt.Qt.Vertical)
 
     def _view(self, menu):
         for pane in self.panes.values():
