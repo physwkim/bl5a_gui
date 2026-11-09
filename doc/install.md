@@ -117,7 +117,8 @@ Tested with Python 3.12.14 and:
 | qtpy | 2.4.3 (optional) |
 
 `install.sh` warns when the Python given with `--python` (default
-`python3`) lacks one of them, and records it as `BL5A_PYTHON` in
+`python3`) lacks one of them or has a repics older than 0.4.4, and
+records it as `BL5A_PYTHON` in
 `bl5a.env`; the GUI's shortcut and the MCP server start that Python.
 
 ## 4. Configure
