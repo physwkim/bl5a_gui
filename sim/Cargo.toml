@@ -11,7 +11,7 @@ publish = false
 chrono = "0.4"
 epics-ca-rs = "0.34.0"
 epics-libcom-rs = "0.34.0"
-rsfai-geometry = { git = "https://github.com/physwkim/rsFAI", rev = "e0be64f884031610a8f0207e957e6c029b78556b" }
+rsfai-geometry = { git = "https://github.com/physwkim/rsFAI", rev = "ea24282d218f4fe191ed296fae7817f7f7d6c362" }
 spec-protocol = { path = "../drivers/spec/protocol" }
 tokio = { version = "1", features = ["io-util", "macros", "net", "rt-multi-thread", "sync", "time"] }
 

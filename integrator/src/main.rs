@@ -11,15 +11,25 @@
 //!   {"method": "stacks"}                 → {"stacks": [{path, series, rows}, …]}
 //!   {"method": "history", "path": p, "from": k (optional, default 0)}
 //!                                        → q and rows k.. of the stack at p
+//!   {"method": "calibrate", "path": frame, "poni": text,
+//!    "calibrant": .D text, "rings": n, "delta_tth": deg, "factor": f,
+//!    "upper": counts, "fixed": [names] (optional),
+//!    "points": [[y, x, ring], …] (optional)}
+//!                                        → {"calibrating": id}; the
+//!                                          refined PONI comes as PUB
+//!                                          `calibration`
 //! PUB `row <json>` for each new row (its stack's path, series and
-//! index), `config <json>` when a set takes effect, and `error <json>`
-//! for each exposure that gave no row.
+//! index), `config <json>` when a set takes effect, `error <json>` for
+//! each exposure that gave no row, and `calibration <json>` for each
+//! calibrate (its id and the PONI, chi2 and peaks, or its error).
 
+mod calibrate;
 mod docs;
 mod engine;
 mod mar;
 mod series;
 
+use std::panic::{self, AssertUnwindSafe};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
@@ -123,6 +133,8 @@ enum Job {
     /// A `set`: the engine of the frames after the queued ones, and its
     /// config.
     Configure(Engine, Value),
+    /// A calibrate's outcome, to publish.
+    Calibrated(Value),
 }
 
 /// The document stream, as exposures and the errors of documents that
@@ -190,6 +202,7 @@ fn work(
                 *config.lock().unwrap() = shown.clone();
                 ("config", shown)
             }
+            Job::Calibrated(body) => ("calibration", body),
         };
         if topic == "error" {
             eprintln!("{body}");
@@ -226,11 +239,11 @@ fn serve(
     jobs: &mpsc::Sender<Job>,
     root: &str,
 ) {
+    let mut calibrations = 0;
     loop {
         let reply = match rep.recv_bytes(0) {
-            Ok(req) => {
-                answer(&req, store, config, jobs, root).unwrap_or_else(|e| json!({ "error": e }))
-            }
+            Ok(req) => answer(&req, store, config, jobs, root, &mut calibrations)
+                .unwrap_or_else(|e| json!({ "error": e })),
             Err(e) => {
                 eprintln!("rep: {e}");
                 return;
@@ -249,6 +262,7 @@ fn answer(
     config: &Mutex<Value>,
     jobs: &mpsc::Sender<Job>,
     root: &str,
+    calibrations: &mut u64,
 ) -> Result<Value, String> {
     let req: Value = serde_json::from_slice(req).map_err(|e| format!("request: {e}"))?;
     match req.get("method").and_then(Value::as_str) {
@@ -297,7 +311,29 @@ fn answer(
                 "frames": s.frames[from..], "intensity": s.intensity[from..], "sigma": s.sigma[from..],
             }))
         }
-        Some(m) => Err(format!("method {m:?}: one of config, set, stacks, history")),
+        Some("calibrate") => {
+            let request = calibrate::Request::parse(&req)?;
+            *calibrations += 1;
+            let (id, jobs) = (*calibrations, jobs.clone());
+            // Seconds of work on a full plate: off the REP thread, so the
+            // other requests are answered meanwhile.
+            thread::spawn(move || {
+                let done = panic::catch_unwind(AssertUnwindSafe(|| calibrate::run(&request)))
+                    .unwrap_or_else(|_| Err("the calibration panicked".into()));
+                let body = match done {
+                    Ok(mut v) => {
+                        v["id"] = json!(id);
+                        v
+                    }
+                    Err(e) => json!({"id": id, "error": e}),
+                };
+                let _ = jobs.send(Job::Calibrated(body));
+            });
+            Ok(json!({ "calibrating": id }))
+        }
+        Some(m) => Err(format!(
+            "method {m:?}: one of config, set, stacks, history, calibrate"
+        )),
         None => Err("a request without a method".into()),
     }
 }

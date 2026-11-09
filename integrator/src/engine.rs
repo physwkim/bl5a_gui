@@ -123,23 +123,44 @@ impl Engine {
 
 impl Plate {
     fn new(poni: &PoniFile, n: usize, um: u32) -> Result<Plate, String> {
+        let scan = Scan::new(poni, n, um)?;
+        let mut ai = AzimuthalIntegrator::from_poni(poni, scan.detector.clone());
+        ai.poni1 -= scan.inset;
+        ai.poni2 -= scan.inset;
+        let mask = scan.off_plate().map(i8::from).collect();
+        Ok(Plate { ai, mask })
+    }
+}
+
+/// An n x n scan of `um` µm pixels on the plate the PONI describes.
+pub struct Scan {
+    pub detector: DetectorModel,
+    /// How far the scan's pixel origin lies inside the plate's, m.
+    pub inset: f64,
+}
+
+impl Scan {
+    pub fn new(poni: &PoniFile, n: usize, um: u32) -> Result<Scan, String> {
         let pix = f64::from(um) * 1e-6;
         let diameter = n as f64 * pix;
         if diameter > PLATE + 1e-9 {
             return Err(format!("a {n} x {um} µm scan is wider than the plate"));
         }
-        let inset = (PLATE - diameter) / 2.0;
         let mut detector = DetectorModel::generic(pix, pix, (n, n));
         detector.orientation = poni.orientation.unwrap_or(3);
-        let mut ai = AzimuthalIntegrator::from_poni(poni, detector);
-        ai.poni1 -= inset;
-        ai.poni2 -= inset;
-        let r = diameter / 2.0;
-        let centre = |i: usize| (i as f64 + 0.5) * pix;
-        let mask = (0..n * n)
-            .map(|k| i8::from((centre(k / n) - r).hypot(centre(k % n) - r) > r))
-            .collect();
-        Ok(Plate { ai, mask })
+        Ok(Scan {
+            detector,
+            inset: (PLATE - diameter) / 2.0,
+        })
+    }
+
+    /// Row-major, true at the pixels outside the scan's circle.
+    pub fn off_plate(&self) -> impl Iterator<Item = bool> + use<> {
+        let n = self.detector.shape.0;
+        let pix = self.detector.pixel1;
+        let r = n as f64 * pix / 2.0;
+        let centre = move |i: usize| (i as f64 + 0.5) * pix;
+        (0..n * n).map(move |k| (centre(k / n) - r).hypot(centre(k % n) - r) > r)
     }
 }
 
