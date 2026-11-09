@@ -317,11 +317,16 @@ class StackTab(qt.QWidget):
         self.offset.setToolTip("Waterfall step, as a fraction of the rows' median maximum")
         self.logI = qt.QCheckBox("log I")
         self.logI.setChecked(True)
-        top = qt.QHBoxLayout()
-        for w in (qt.QLabel("Stack"), self.series, self.refresh, self.follow, qt.QLabel("y"), self.yaxis,
-                  self.th, self.logI, self.mode, self.last, self.offset):
-            top.addWidget(w)
-        top.addStretch()
+        # Which stack, then how to show it: on one row the controls were wider
+        # than the first layout's centre and scrolled the plots' right edge away.
+        top = qt.QVBoxLayout()
+        for row in ((qt.QLabel("Stack"), self.series, self.refresh, self.follow),
+                    (qt.QLabel("y"), self.yaxis, self.th, self.logI, self.mode, self.last, self.offset)):
+            line = qt.QHBoxLayout()
+            for w in row:
+                line.addWidget(w)
+            line.addStretch()
+            top.addLayout(line)
         self.heat = Plot2D(self)
         self.heat.setKeepDataAspectRatio(False)
         self.heat.getXAxis().setLabel("q [Å⁻¹]")

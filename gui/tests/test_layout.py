@@ -48,6 +48,11 @@ class LayoutTest(unittest.TestCase):
         self.app.processEvents()
         self.assertLess(w.centralWidget().width(), w.stackTab.minimumSizeHint().width())
 
+    def test_the_first_layout_shows_every_tab_whole(self):
+        w = self.window()
+        self.assertGreaterEqual(w.centralWidget().viewport().width(), w.tabs.minimumSizeHint().width())
+        self.assertEqual(w.centralWidget().horizontalScrollBar().maximum(), 0)
+
     def test_layout_outlives_the_window_until_reset(self):
         w = self.window()
         w.panes["queue"].setFloating(True)
