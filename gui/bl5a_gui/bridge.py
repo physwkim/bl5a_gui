@@ -213,8 +213,8 @@ class PVs(qt.QObject):
             # form="ctrl": with the default "time" form a monitor's
             # char_value of an enum is its index until the state names are
             # fetched some other way.
-            self.pvs[name] = PV(name, auto_monitor=True, form="ctrl", callback=self._changed,
-                                connection_callback=self._connected)
+            self.pvs[name] = PV(name, auto_monitor=True, form="ctrl", connection_timeout=CONNECT_TIMEOUT,
+                                callback=self._changed, connection_callback=self._connected)
         return self.pvs.get(name)
 
     def _changed(self, pvname=None, value=None, char_value=None, **kw):
@@ -238,13 +238,10 @@ class PVs(qt.QObject):
 
     @staticmethod
     def _put_wait(pv, value, callback):
-        """A put's timeout covers its connect too: the connect is bounded
-        first, then the completion waits as long as the record takes."""
+        """The PV's connection_timeout bounds the connect; the completion
+        waits as long as the record takes."""
         try:
-            if pv.wait_for_connection(CONNECT_TIMEOUT):
-                pv.put(value, wait=True, timeout=None)
-            else:
-                logger.warning("%s: put %r: not connected", pv.pvname, value)
+            pv.put(value, wait=True, timeout=None)
         except CaError as e:
             logger.warning("%s: put %r: %s", pv.pvname, value, e)
         finally:

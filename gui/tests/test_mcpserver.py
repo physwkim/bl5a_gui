@@ -102,20 +102,19 @@ def test_tools_and_their_arguments():
 
 
 class FakePV:
-    """repics.pv.PV as Beamline uses it: a put returns nothing, a failure
-    raises `fails`."""
+    """repics.pv.PV as Beamline uses it: a put returns nothing and calls
+    back once sent, a failure raises `fails`."""
 
     def __init__(self, value=None, connected=True, fails=None):
         self.pvname = "fake"
         self.value, self.connected, self.fails, self.puts = value, connected, fails, []
 
-    def wait_for_connection(self, timeout):
-        return self.connected
-
-    def put(self, value, wait, timeout):
+    def put(self, value, wait=False, timeout=30.0, callback=None, callback_data=None):
         if self.fails is not None:
             raise self.fails
         self.puts.append(value)
+        if callback is not None:
+            callback(pvname=self.pvname, data=callback_data)
 
     def get(self, timeout, use_monitor, as_string=False):
         if self.fails is not None:
@@ -193,8 +192,8 @@ def test_tweak_of_a_refused_move_is_an_error():
 
 
 @pytest.mark.parametrize("field, fails, error", [
-    (".TWV", {"connected": False}, r"tth\.TWV: not connected"),
-    (".TWF", {"fails": CaTimeout("timed out after 300 s", 80)}, r"tth\.TWF: put not completed in 300 s"),
+    (".TWV", {"fails": CaTimeout("channel not found: tth.TWV", 80)}, r"tth\.TWV: channel not found"),
+    (".TWF", {"fails": CaTimeout("timed out after 300 s", 80)}, r"tth\.TWF: timed out after 300 s$"),
     (".MSTA", {"fails": CaTimeout("timed out after 2 s", 80)}, r"tth\.MSTA: timed out after 2 s$"),
 ])
 def test_tweak_whose_channel_fails_is_an_error(field, fails, error):
@@ -204,17 +203,19 @@ def test_tweak_whose_channel_fails_is_an_error(field, fails, error):
     assert bl.spec_job is None
 
 
-def test_spec_command_whose_cmd_put_fails_ends():
+def test_spec_command_ends_once_its_put_calls_back():
+    # repics calls back when the server completes the put or fails it.
     bl = beamline({"re_state": "idle"})
-    for s in ("Cmd", "Cmd:Status", "Cmd:Reply"):
+    bl.pvs[config.SPEC + "Cmd"] = cmd = FakePV()
+    for s in ("Cmd:Status", "Cmd:Reply"):
         bl.pvs[config.SPEC + s] = FakePV(fails=CaDisconnected("disconnected", 24))
     got = bl.spec_command("wa", 5.0)
-    assert got["cmd"] == "wa" and got["status"] == "no status" and bl.spec_job is None
+    assert cmd.puts == ["wa"] and got["cmd"] == "wa" and got["status"] == "no status" and bl.spec_job is None
 
 
 def test_spec_command_to_an_unconnected_cmd_is_an_error():
     bl = beamline({"re_state": "idle"})
-    bl.pvs[config.SPEC + "Cmd"] = FakePV(connected=False)
-    with pytest.raises(mcpserver.ToolError, match="Cmd: not connected"):
+    bl.pvs[config.SPEC + "Cmd"] = FakePV(fails=CaTimeout("channel not found: SPEC:Cmd", 80))
+    with pytest.raises(mcpserver.ToolError, match="Cmd: channel not found"):
         bl.spec_command("wa", 5.0)
     assert bl.spec_job is None

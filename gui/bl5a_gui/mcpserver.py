@@ -26,7 +26,7 @@ from mcp.server.mcpserver import Image, MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp_types import ToolAnnotations
 from pydantic import BaseModel, ConfigDict, Field
-from repics import CaError, CaTimeout
+from repics import CaError
 from repics.pv import PV
 
 from . import config, docs, gate, items, mar, peak, sequences
@@ -251,13 +251,13 @@ class Beamline:
             watched += [config.SPEC + m + "." + f for f in ("RBV", "DMOV", "TWV", "PREC", "EGU")]
         for name in watched:
             if name:
-                self.pvs[name] = PV(name, auto_monitor=True, form="ctrl", callback=self._changed,
-                                    connection_callback=self._connected)
+                self.pvs[name] = PV(name, auto_monitor=True, form="ctrl", connection_timeout=CONNECT_TIMEOUT,
+                                    callback=self._changed, connection_callback=self._connected)
         puts = [config.SPEC + s for s in ("Cmd", "Cmd:Status", "Cmd:Reply", "Cmd:Abort")]
         puts += [config.SPEC + m + f for m in config.MOTORS for f in (".TWF", ".TWR")]
         fresh = [config.SPEC + m + ".MSTA" for m in config.MOTORS]
         for name in puts + fresh:
-            self.pvs[name] = PV(name, auto_monitor=False)
+            self.pvs[name] = PV(name, auto_monitor=False, connection_timeout=CONNECT_TIMEOUT)
         self.relay.subscribe(self._document)
         self.relay.start()
         for target, name in ((self._poll, "bl5a-mcp-qs"), (self._integrator_pub, "bl5a-mcp-integrator")):
@@ -462,21 +462,12 @@ class Beamline:
         except CaError:
             return ""
 
-    def connected(self, name):
-        """`name`'s PV, connected. A put's timeout covers its connect too,
-        so a put waits for the connection here first."""
-        pv = self.pvs[name]
-        if not pv.wait_for_connection(CONNECT_TIMEOUT):
-            raise ToolError("{}: not connected".format(name))
-        return pv
-
     def put(self, name, value, timeout):
-        """A put that waits for completion; raises unless it completed."""
-        pv = self.connected(name)
+        """A put that waits for completion; raises unless it completed.
+        `timeout` covers the connect, which the PV's connection_timeout
+        bounds."""
         try:
-            pv.put(value, wait=True, timeout=timeout)
-        except CaTimeout:
-            raise ToolError("{}: put not completed in {:g} s".format(name, timeout)) from None
+            self.pvs[name].put(value, wait=True, timeout=timeout)
         except CaError as e:
             raise ToolError("{}: {}".format(name, e.args[0])) from None
 
@@ -513,26 +504,24 @@ class Beamline:
         with self.spec_lock:
             c = Command(cmd, time.time(), self.spec_log.last)
             self._claim(c)
+            name = config.SPEC + "Cmd"
             try:
-                pv = self.connected(config.SPEC + "Cmd")
-                threading.Thread(target=self._send, args=(pv, c), name="bl5a-mcp-cmd", daemon=True).start()
-            except Exception:
+                # Sent here, so a Cmd that cannot be sent raises; the
+                # callback has no timeout, as a command may run for hours.
+                self.pvs[name].put(cmd, callback=self._finished, callback_data=c)
+            except Exception as e:
                 self.spec_job = None
+                if isinstance(e, CaError):
+                    raise ToolError("{}: {}".format(name, e.args[0])) from None
                 raise
         c.done.wait(wait_s)
         return self.command_result(c)
 
     @staticmethod
-    def _send(pv, c):
-        """`c` put to Cmd, done once SPEC has run it (no timeout: a
-        command may run for hours) or the put has failed."""
-        try:
-            pv.put(c.cmd, wait=True, timeout=None)
-        except CaError as e:
-            logger.warning("%s: %r: %s", pv.pvname, c.cmd, e)
-        finally:
-            c.finished = time.time()
-            c.done.set()
+    def _finished(data, **kw):
+        """Command `data` done: SPEC has run it or the put has failed."""
+        data.finished = time.time()
+        data.done.set()
 
     def command_result(self, c=None):
         """`c`'s reply (the last command's when None), or that it still
@@ -555,7 +544,7 @@ class Beamline:
                 raise ToolError("no command sent from this server is running; spec_abort interrupts only "
                                 "those, as the GUI's ^C does")
             try:
-                self.connected(name).put(1, wait=False, timeout=CONNECT_TIMEOUT)
+                self.pvs[name].put(1, wait=False, timeout=CONNECT_TIMEOUT)
             except CaError as e:
                 raise ToolError("{}: {}".format(name, e.args[0])) from None
         return {"aborting": c.cmd}
