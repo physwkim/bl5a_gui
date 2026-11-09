@@ -41,12 +41,13 @@ the integrator, so it shows every stack it holds.
 | --- | --- |
 | Top | the View menu, the run buttons (Pause, Resume, Stop, Abort, Stop all) and the status line |
 | Left | the Setup and Motors panes, as tabs; Setup holds the Data and Integration boxes, the Alignment box, the Battery, In-situ and Scan forms |
-| Centre | the Alignment tab: the scan plot, with the Stages of the running alignment and the Alignment history below it; the Image and Stack tabs |
+| Centre | the Alignment tab: the scan plot, with the Stages of the running alignment and the Alignment history below it; the Image, Stack and Calibration tabs |
 | Right | the Queue |
 | Bottom | the SPEC console, the Commands the plans sent, the GUI's Messages, as tabs |
 
 The Stages and Alignment history panes belong to the Alignment tab, so
-the Image and Stack tabs have the whole centre to themselves.
+the Image, Stack and Calibration tabs have the whole centre to
+themselves.
 
 Every pane has a title bar. Drag the edge between two panes, or between
 a pane and the centre tabs or the scan plot, to resize them; a pane
@@ -215,6 +216,9 @@ npt, the q range and the PONI.
 | PONI | a pyFAI PONI file for the full 345 mm plate; **Browse…** picks it |
 | npt | the bins from q = 0 to the plate's far rim (default 2000) |
 | Apply | reads the file and sends its text and npt to the integrator |
+
+**Save and apply…** on the [Calibration tab](#calibration-tab) puts
+the refined PONI's file in PONI and applies it the same way.
 
 The integrator checks them first: a PONI it cannot use is refused, and
 the box adds "Refused:" and the reason. An accepted one applies to the
@@ -682,6 +686,52 @@ does not reply. The integrator's settings are in the
 The integrator reads a folder's stacks once, at its start or at the
 folder's first row. A stack file deleted on disk while it runs stays in
 the list until the series' next frame, which starts the file again.
+
+## Calibration tab
+
+![The simulated frame refined from a start 2 mm off](img/calibration.png)
+
+The tab refines the plate's PONI on a frame of a calibrant the way
+Dioptas's automatic refinement does it; the integrator does the work,
+with rsFAI. From the start PONI it searches the rings in turn, from the
+innermost: the pixels within Δ2θ of a ring that stand above Mean factor
+× the band's mean + its standard deviation give the ring's peaks, and
+the geometry is refined on every peak found so far before the next
+ring. Pixels off the scanned disc are left out.
+
+| Control | What it does |
+| --- | --- |
+| Latest, Open… | loads the mar345's last frame, or any mar345 file |
+| Integrator's, Load…, Result | the start PONI: the integrator's, which it follows as the integrator's changes; a PONI file of the full 345 mm plate; or the last refined one, to refine again from |
+| Calibrant | LaB6, CeO2, Si (NIST SRM 660c, 674b, 640c) or Al, with pyFAI's d spacings; Cubic P: every hkl of the lattice constant a; .D file: a pyFAI d-spacing file |
+| Rings | the rings searched, from the innermost (default 15); those the PONI's wavelength does not reach are left out |
+| Δ2θ | the half width of each ring's band (default 0.1°) |
+| Mean factor | default 1; Dioptas's 3 finds only the inner rings of the simulated frame, whose rings are broad |
+| Upper limit | pixels above this count, saturated ones, are left out (default none) |
+| Fixed | the parameters held at the start value; rot3 by default, which round rings barely show |
+| Pick, Ring #, Clear | peaks picked by hand, below |
+| Refine | sends the frame, the start PONI, the calibrant and the picks to the integrator |
+| Rings of | the PONI the dashed rings are drawn with: Start, Refined, or none |
+| Save and apply… | writes the refined PONI to a file and applies it as the [Integration](#integration) box's Apply does |
+
+The line under Refine gives the peaks found on each ring, chi2 (the sum
+of their squared 2θ misfits, rad²) and the seconds it took, or
+"Failed:" and the reason. The peaks are drawn as red dots, the rings
+move to the refined PONI, and the table gives the start, the refined
+value and the change.
+
+A start too far off puts the bands beside the rings, and the search
+finds nothing or the wrong peaks. Then press **Pick**, set **Ring #**
+(1 the innermost) and click on that ring in a few places, then on
+another ring; each click takes the brightest pixel within 5 pixels,
+drawn as an orange ×. The integrator refines the start on the picks
+before the search. A second click within 0.4 s is a double click and
+picks nothing. **Clear** drops the picks, as does a new frame.
+
+**Save and apply…** offers the frame's name with `.poni`. The frames
+after those already queued are integrated with the new PONI; the Image
+tab's rings, the Integration box and an Integrator's start follow it
+when it takes effect.
 
 ## SPEC console, Commands, Messages
 

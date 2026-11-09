@@ -470,6 +470,13 @@ coin_align, Thin film = align_in.mac)이 읽기 전용으로 있고, 이용자 �
 - 설정은 시작 인자 `--poni`·`--npt`로 시작하고 REP `set`으로 바꾼다. `set`은
   큐에 이미 들어간 프레임 뒤에 적용되고(작업 큐의 `Configure`), 적용될 때
   PUB `config`를 낸다. 재시작하면 시작 인자로 돌아간다.
+- REP `calibrate{path, poni, calibrant, rings, delta_tth, factor, upper,
+  fixed, points}`는 보정 시료 프레임에서 판의 PONI를 Dioptas의 자동
+  정련(rsfai-calib `auto_refine`)으로 다듬는다. 손으로 찍은 `points`가
+  있으면 먼저 그것으로 정련한다. 답은 `{calibrating: id}`이고, 정련은 별도
+  스레드에서 돌아 그동안 다른 요청도 답한다. 결과는 작업 큐를 거쳐 PUB
+  `calibration{id, path, poni, chi2, points}`(실패면 `{id, error}`)로 낸다.
+  적분 설정은 바꾸지 않는다. 적용은 GUI가 저장한 PONI를 `set`으로 보낸다.
 - `get_pck`는 `i16`을 돌려준다. 적분 전에 32767을 넘는 픽셀(u16 해석)과
   헤더의 high-intensity overflow 레코드를 처리해야 한다. 실제 BL5A 파일로
   확인한다.
@@ -531,7 +538,9 @@ Python Qt(silx.gui.qt + repics). bl7c `pal_tools`의 `bsrs_client.py`,
 - **상태줄**: 링 전류는 `BL5A:userCalcOut1.VAL`(SPEC ringI와 같은 PV).
 - **플롯 탭**: Scan(라이브, CEN/COM/MAX 마커), Image(최근 mar 프레임, log,
   PONI 링 오버레이), Stack(q × 프레임 heatmap, y축 선택, th 필터, 선택 행
-  overlay/waterfall).
+  overlay/waterfall), Calibration(보정 시료 프레임, 시작·정련 PONI의 링,
+  REP `calibrate`; 저장한 PONI는 Integration 상자의 `applyFile` 하나로
+  `set`).
 - **Data 상자**: 앞으로 큐에 넣을 아이템의 데이터 root(비면 bl5a-qs의
   `--data-root`)와 mar345-ioc가 지금 쓰는 폴더(`FilePath_RBV`, 안 보이면
   빨간 "missing")를 보인다. root는 QSettings에 남는다.
