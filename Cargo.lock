@@ -338,6 +338,7 @@ dependencies = [
  "clap",
  "rmp-serde",
  "rsfai",
+ "rsfai-core",
  "rsfai-geometry",
  "rust-hdf5",
  "serde",

@@ -8,6 +8,7 @@ use std::collections::hash_map::Entry;
 use std::f64::consts::TAU;
 
 use rsfai::{AzimuthalIntegrator, Corrections, DetectorModel, ErrorModelKind, IntegrationOptions};
+use rsfai_core::dtype::calc_upper_bound;
 use rsfai_geometry::{PoniFile, Space, Unit, calc_pos_zyx, equation};
 
 use crate::mar::Image;
@@ -57,9 +58,17 @@ impl Engine {
         })
     }
 
+    /// The bin width, Å⁻¹: rsfai (pyFAI's `calc_upper_bound`) bins
+    /// (0, q_max·EPS32) in `npt`, so its centres are (k + ½)·step and
+    /// the axis is its own by construction.
+    fn step(&self) -> f64 {
+        let scale = Unit::Q_A_INV.scale;
+        calc_upper_bound(self.q_max / scale) * scale / self.npt as f64
+    }
+
     /// Bin centres, Å⁻¹.
     pub fn q(&self) -> Vec<f64> {
-        let step = self.q_max / self.npt as f64;
+        let step = self.step();
         (0..self.npt).map(|k| (k as f64 + 0.5) * step).collect()
     }
 
@@ -86,12 +95,12 @@ impl Engine {
             .ai
             .integrate1d_with(&image.data, self.npt, Unit::Q_A_INV, &opts, &corr);
         // The stored axis is q(); rsfai's centres must be the same bins.
-        let step = self.q_max / self.npt as f64;
+        let step = self.step();
         if let Some((k, q)) = r
             .radial
             .iter()
             .enumerate()
-            .find(|&(k, q)| (q - (k as f64 + 0.5) * step).abs() > 1e-3 * step)
+            .find(|&(k, q)| (q - (k as f64 + 0.5) * step).abs() > 1e-9 * step)
         {
             return Err(format!(
                 "rsfai bin {k} is centred at {q}, not on the q axis"
@@ -208,6 +217,23 @@ mod tests {
         // λ 0.7749 Å, 0.3 m to a 0.1725 m radius: 2θ ≈ 30°, q ≈ 4.2 Å⁻¹.
         assert!(e.q_max > 4.0 && e.q_max < 4.6, "q_max {}", e.q_max);
         assert_eq!(e.q().len(), 2000);
+        let q = e.q();
+        assert!(
+            (q[1999] + q[0] - e.q_max).abs() < 1e-6,
+            "{} {}",
+            q[0],
+            q[1999]
+        );
+    }
+
+    /// rsfai's bins are (0, q_max·EPS32) / npt: at 10 000 bins the
+    /// centres drift 1.2e-3 of a bin from q_max / npt, which failed the
+    /// axis check from bin 8389 on.
+    #[test]
+    fn the_axis_is_rsfais_at_ten_thousand_bins() {
+        let mut e = Engine::new(PONI.into(), 10_000).unwrap();
+        let p = e.integrate(&ring(&e, 3.5, 1000.0), 10.0).unwrap();
+        assert_eq!(p.intensity.len(), 10_000);
     }
 
     /// The peak bin of a ring at d is the bin 2π/d falls in, its height
