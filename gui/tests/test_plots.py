@@ -1,8 +1,10 @@
 """ScanTab's markers: a stage's scan shows the statistics the stage moved
-by, which are of its outlier-filtered points, not of the points drawn."""
+by, which are of its outlier-filtered points, not of the points drawn.
+The curve plots leave room above and below their points."""
 
 import math
 import unittest
+from unittest import mock
 
 from silx.gui import qt
 
@@ -34,6 +36,19 @@ class ScanTabTest(unittest.TestCase):
     def marks(self):
         return {m.getLegend(): m.getXPosition() for m in self.tab.plot.getItems()
                 if hasattr(m, "getXPosition") and not hasattr(m, "getXData")}
+
+    def assertClear(self, plot):
+        lo, hi = plot.getYAxis().getLimits()
+        self.assertLess(lo, min(Y))
+        self.assertGreater(hi, max(Y))
+        self.assertEqual(plot.getXAxis().getLimits(), (X[0], X[-1]))
+
+    def test_points_clear_the_top_and_bottom(self):
+        self.assertClear(self.tab.plot)
+        stack = plots.StackTab(mock.Mock())
+        self.addCleanup(stack.deleteLater)
+        stack.profiles.addCurve(X, Y)
+        self.assertClear(stack.profiles)
 
     def test_scan_without_stage_shows_its_points(self):
         self.assertEqual(self.marks()["CEN"], peak.stats(X, Y).cen)

@@ -14,6 +14,9 @@ from . import config, docs, mar, peak
 from .vendor.Plot1DCustom import Plot1DCustom
 
 MARKERS = (("cen", "CEN", "#d62728"), ("com", "COM", "#2ca02c"), ("xpk", "MAX", "#1f77b4"))
+# Room above and below the curves, as a fraction of their y range, so no
+# point sits on the frame.
+Y_MARGINS = (0.0, 0.0, 0.05, 0.05)
 
 
 class ScanTab(qt.QWidget):
@@ -26,6 +29,7 @@ class ScanTab(qt.QWidget):
         super().__init__(parent)
         self.plot = Plot1DCustom(self)
         self.plot.setGraphGrid(True)
+        self.plot.setDataMargins(*Y_MARGINS)
         self.scans = qt.QComboBox()
         self.scans.setSizeAdjustPolicy(qt.QComboBox.AdjustToContents)
         self.stats = qt.QLabel()
@@ -308,6 +312,7 @@ class StackTab(qt.QWidget):
         self.heat.getColorBarWidget().getColorScaleBar().getTickBar().setDisplayType("e")
         self.colormap = Colormap("viridis", normalization=Colormap.LOGARITHM)
         self.profiles = Plot1D(self)
+        self.profiles.setDataMargins(*Y_MARGINS)
         self.profiles.getXAxis().setLabel("q [Å⁻¹]")
         self.profiles.getYAxis().setLabel("I / icxrd")
         self.info = qt.QLabel("integrator: not answering")
