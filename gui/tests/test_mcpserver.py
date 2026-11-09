@@ -127,11 +127,11 @@ class FakePV:
 
 
 def beamline(qs):
-    """A Beamline with SPEC free and qs reporting `qs`."""
+    """A Beamline with SPEC free and qs reporting `qs` with its environment open."""
     bl = mcpserver.Beamline("tcp://127.0.0.1:1", "tcp://127.0.0.1:2", "tcp://127.0.0.1:3", "tcp://127.0.0.1:4",
                             "test")
     bl.sync = lambda: None
-    bl.qs = qs
+    bl.qs = None if qs is None else {"worker_environment_exists": True, **qs}
     bl.spec = {"Connected": "Connected", "Busy": "Ready", "Cmd:Busy": "Idle"}
     return bl
 

@@ -355,7 +355,7 @@ class Beamline:
             if st is None:
                 qs = "qs not answering: {}".format(self.qs_error)
             else:
-                qs = "qs {}".format(st.get("re_state"))
+                qs = "qs {}".format(gate.re_state(st) or st.get("manager_state"))
                 if st.get("running_item_uid"):
                     qs += ", running {}".format(st.get("running_item_name"))
             spec = ", ".join("{} {}".format(k, v or "—") for k, v in self.spec.items())

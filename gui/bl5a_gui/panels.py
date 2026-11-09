@@ -4,7 +4,7 @@ import html
 
 from silx.gui import qt
 
-from . import config, items, sequences
+from . import config, gate, items, sequences
 from .editor import SequenceEditor, UserCombo, resolve, source
 from .items import Invalid
 
@@ -51,7 +51,7 @@ class StatusBar(qt.QWidget):
         if status is None:
             self.set("qs", _dot("#c33") + " not answering")
             return
-        state = status.get("re_state") or status.get("manager_state") or "?"
+        state = gate.re_state(status) or status.get("manager_state") or "?"
         color = {"idle": "#3a3", "paused": "#e90"}.get(state, "#36c")
         text = state
         if status.get("running_item_name"):

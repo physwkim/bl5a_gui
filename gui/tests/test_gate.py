@@ -9,7 +9,13 @@ SPEC_FREE = {"Connected": "Connected", "Busy": "Ready", "Cmd:Busy": "Idle"}
 
 
 def qs(state, running=None, uid=None):
-    return {"re_state": state, "running_item_name": running, "running_item_uid": uid}
+    return {"re_state": state, "running_item_name": running, "running_item_uid": uid,
+            "worker_environment_exists": True}
+
+
+# bsrs's status with no worker environment: its re_state is the text "null".
+CLOSED = {"re_state": "null", "manager_state": "environment_closed", "running_item_name": None,
+          "running_item_uid": None, "worker_environment_exists": False}
 
 
 def opened(st, spec=SPEC_FREE, after_frame=False):
@@ -19,6 +25,10 @@ def opened(st, spec=SPEC_FREE, after_frame=False):
 class AllowedTest(unittest.TestCase):
     def test_qs_silent(self):
         self.assertEqual(opened(None), set())
+
+    def test_environment_closed(self):
+        self.assertIsNone(gate.re_state(CLOSED))
+        self.assertEqual(opened(CLOSED), set())
 
     def test_spec_free_only_when_idle_and_ready(self):
         self.assertEqual(opened(qs("idle")), {"spec"})
@@ -51,7 +61,7 @@ class StopAfterFrameTest(unittest.TestCase):
         self.assertFalse(f.status(qs("paused", "mar_series", "u")))
 
     def test_idle_or_silent_drops_it(self):
-        for st in (qs("idle"), None):
+        for st in (qs("idle"), CLOSED, None):
             f = gate.StopAfterFrame()
             f.asked = True
             self.assertFalse(f.status(st))

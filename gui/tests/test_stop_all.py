@@ -23,6 +23,8 @@ class PVs:
 
 
 def window(qs, connected=True, after_frame=False):
+    if qs is not None:
+        qs = {"worker_environment_exists": True, **qs}
     w = types.SimpleNamespace(qs=qs, spec=dict(SPEC_FREE), afterFrame=gate.StopAfterFrame(), pvs=PVs(connected),
                               runs=[], lines=[], shown=0)
     w.afterFrame.asked = after_frame

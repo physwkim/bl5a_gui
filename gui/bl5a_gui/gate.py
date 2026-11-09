@@ -5,6 +5,15 @@ GUI's buttons and the MCP tools both apply."""
 SPEC_STATE = ("Connected", "Busy", "Cmd:Busy")
 
 
+def re_state(qs):
+    """The RunEngine's state in the status `qs`: None while qs does not
+    answer or has no worker environment, where bsrs's re_state is the
+    text "null"."""
+    if not qs or not qs.get("worker_environment_exists"):
+        return None
+    return qs.get("re_state")
+
+
 def allowed(qs, spec, after_frame):
     """The actions open now, by name. `qs` is the last status (None while
     qs does not answer), `spec` maps SPEC_STATE to each PV's text (None
@@ -12,7 +21,7 @@ def allowed(qs, spec, after_frame):
     command line and the motor tweaks) is free only when qs runs nothing
     and SPEC is connected and idle."""
     st = qs or {}
-    state = st.get("re_state") if qs else None
+    state = re_state(qs)
     running = state is not None and state != "idle"
     return {
         "spec": (state == "idle" and not st.get("running_item_uid") and spec.get("Connected") == "Connected"
@@ -29,8 +38,9 @@ def allowed(qs, spec, after_frame):
 class StopAfterFrame:
     """"Stop after frame": a deferred pause lets the frame being taken
     finish, and a stop follows once qs reports paused. `asked` holds from
-    the request until then; qs idle or silent drops it, and so does a
-    refused request or an abort (the caller clears it)."""
+    the request until then; qs idle, silent or without an environment
+    drops it, and so does a refused request or an abort (the caller clears
+    it)."""
 
     def __init__(self):
         self.asked = False
@@ -39,10 +49,10 @@ class StopAfterFrame:
         """Read one status; True when the stop is due now."""
         if not self.asked:
             return False
-        state = qs.get("re_state") if qs is not None else None
+        state = re_state(qs)
         if state == "paused":
             self.asked = False
             return True
-        if qs is None or state == "idle":
+        if state in (None, "idle"):
             self.asked = False
         return False
