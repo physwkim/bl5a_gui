@@ -206,16 +206,28 @@ def test_tweak_whose_channel_fails_is_an_error(field, fails, error):
 def test_spec_command_ends_once_its_put_calls_back():
     # repics calls back when the server completes the put or fails it.
     bl = beamline({"re_state": "idle"})
-    bl.pvs[config.SPEC + "Cmd"] = cmd = FakePV()
+    bl.pvs[config.SPEC_CMD] = cmd = FakePV()
     for s in ("Cmd:Status", "Cmd:Reply"):
         bl.pvs[config.SPEC + s] = FakePV(fails=CaDisconnected("disconnected", 24))
     got = bl.spec_command("wa", 5.0)
-    assert cmd.puts == ["wa"] and got["cmd"] == "wa" and got["status"] == "no status" and bl.spec_job is None
+    assert [p.tobytes() for p in cmd.puts] == [b"wa\0"]
+    assert got["cmd"] == "wa" and got["status"] == "no status" and bl.spec_job is None
+
+
+def test_spec_command_sends_a_line_past_39_characters_as_a_char_array():
+    # A str goes out as a DBR_STRING, which holds 39 characters.
+    bl = beamline({"re_state": "idle"})
+    bl.pvs[config.SPEC_CMD] = cmd = FakePV()
+    for s in ("Cmd:Status", "Cmd:Reply"):
+        bl.pvs[config.SPEC + s] = FakePV("")
+    line = "wm martran marsdd marz marshut marx ipbsx ipbsy"
+    bl.spec_command(line, 5.0)
+    assert cmd.puts[0].dtype == np.uint8 and cmd.puts[0].tobytes() == line.encode() + b"\0"
 
 
 def test_spec_command_to_an_unconnected_cmd_is_an_error():
     bl = beamline({"re_state": "idle"})
-    bl.pvs[config.SPEC + "Cmd"] = FakePV(fails=CaTimeout("channel not found: SPEC:Cmd", 80))
-    with pytest.raises(mcpserver.ToolError, match="Cmd: channel not found"):
+    bl.pvs[config.SPEC_CMD] = FakePV(fails=CaTimeout("channel not found: SPEC:Cmd.VAL$", 80))
+    with pytest.raises(mcpserver.ToolError, match=r"Cmd\.VAL\$: channel not found"):
         bl.spec_command("wa", 5.0)
     assert bl.spec_job is None

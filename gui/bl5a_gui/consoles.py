@@ -84,7 +84,7 @@ class SpecConsole(qt.QWidget):
         self.out.appendPlainText("{} SPEC> {}".format(stamp(), cmd))
         # The completion callback runs on another thread; the signal brings
         # it to this one.
-        self.pvs.put(config.SPEC + "Cmd", cmd, callback=self.replied.emit)
+        self.pvs.put(config.SPEC_CMD, config.spec_line(cmd), callback=self.replied.emit)
 
     def _replied(self):
         cmd, self.pending = self.pending, None

@@ -253,7 +253,7 @@ class Beamline:
             if name:
                 self.pvs[name] = PV(name, auto_monitor=True, form="ctrl", connection_timeout=CONNECT_TIMEOUT,
                                     callback=self._changed, connection_callback=self._connected)
-        puts = [config.SPEC + s for s in ("Cmd", "Cmd:Status", "Cmd:Reply", "Cmd:Abort")]
+        puts = [config.SPEC_CMD] + [config.SPEC + s for s in ("Cmd:Status", "Cmd:Reply", "Cmd:Abort")]
         puts += [config.SPEC + m + f for m in config.MOTORS for f in (".TWF", ".TWR")]
         fresh = [config.SPEC + m + ".MSTA" for m in config.MOTORS]
         for name in puts + fresh:
@@ -504,11 +504,11 @@ class Beamline:
         with self.spec_lock:
             c = Command(cmd, time.time(), self.spec_log.last)
             self._claim(c)
-            name = config.SPEC + "Cmd"
+            name = config.SPEC_CMD
             try:
                 # Sent here, so a Cmd that cannot be sent raises; the
                 # callback has no timeout, as a command may run for hours.
-                self.pvs[name].put(cmd, callback=self._finished, callback_data=c)
+                self.pvs[name].put(config.spec_line(cmd), callback=self._finished, callback_data=c)
             except Exception as e:
                 self.spec_job = None
                 if isinstance(e, CaError):
