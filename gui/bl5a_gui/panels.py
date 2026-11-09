@@ -5,7 +5,7 @@ import html
 from silx.gui import qt
 
 from . import config, gate, items, sequences
-from .editor import SequenceEditor, UserCombo, resolve, source
+from .editor import SequenceEditor, UserCombo, dialog_dir, resolve, source
 from .items import Invalid
 
 DASH = "—"
@@ -367,7 +367,8 @@ class IntegrationBox(qt.QGroupBox):
         integrator.failed.connect(self._failed)
 
     def _browse(self):
-        path, _ = qt.QFileDialog.getOpenFileName(self, "PONI", self.poni.text(), "PONI (*.poni);;All files (*)")
+        path, _ = qt.QFileDialog.getOpenFileName(self, "PONI", dialog_dir(self.poni.text()),
+                                                 "PONI (*.poni);;All files (*)")
         if path:
             self.poni.setText(path)
 

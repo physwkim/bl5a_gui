@@ -12,6 +12,7 @@ from silx.gui.colors import Colormap
 from silx.gui.plot import Plot1D, Plot2D
 
 from . import config, docs, mar, peak
+from .editor import dialog_dir
 from .vendor.Plot1DCustom import Plot1DCustom
 
 MARKERS = (("cen", "CEN", "#d62728"), ("com", "COM", "#2ca02c"), ("xpk", "MAX", "#1f77b4"))
@@ -245,7 +246,8 @@ class ImageTab(qt.QWidget):
         self.loader.load(path)
 
     def _open(self):
-        path, _ = qt.QFileDialog.getOpenFileName(self, "mar345 frame", "", "mar345 (*.mar*);;All files (*)")
+        here = dialog_dir(posixpath.dirname(self.image[0]) if self.image else "")
+        path, _ = qt.QFileDialog.getOpenFileName(self, "mar345 frame", here, "mar345 (*.mar*);;All files (*)")
         if path:
             self.load(path)
 

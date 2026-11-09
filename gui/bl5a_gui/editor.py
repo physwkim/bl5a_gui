@@ -18,6 +18,12 @@ def source():
     return str(s.value("data_root", "") or ""), str(s.value("align_user", "") or "")
 
 
+def dialog_dir(path=""):
+    """Where a file dialog opens: at `path`, else in the Data folder; Qt's
+    own fallback is the GUI's working directory."""
+    return (path or "").strip() or source()[0]
+
+
 def resolve(name):
     """(name, blocks) of the sequence `name` for the current user."""
     root, user = source()

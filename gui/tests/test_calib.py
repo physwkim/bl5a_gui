@@ -14,7 +14,7 @@ import numpy as np
 from silx.gui import qt
 from silx.gui.utils.testutils import TestCaseQt
 
-from bl5a_gui import bridge, calib, config, main, panels
+from bl5a_gui import bridge, calib, config, main, panels, plots
 from bl5a_gui.calib import CalibrationTab
 
 PONI = """poni_version: 2.1
@@ -306,6 +306,38 @@ class CalibrationTabTest(TestCaseQt):
         with open(path) as f:
             self.assertEqual(f.read(), REFINED)
         self.assertEqual(applied, [path])
+
+
+class DialogTest(TestCaseQt):
+    def setUp(self):
+        super().setUp()
+        self.dir = _settings(self)
+        qt.QSettings(*config.SETTINGS).setValue("data_root", self.dir)
+        self.tab = CalibrationTab(Integrator())
+        self.image = plots.ImageTab()
+        self.box = panels.IntegrationBox(Integrator())
+        for w in (self.tab, self.image, self.box):
+            self.addCleanup(w.deleteLater)
+        self.dialogs = {"frame": self.tab._open, "start PONI": self.tab._loadPoni, "d spacings": self.tab._browseD,
+                        "image": self.image._open, "integration PONI": self.box._browse}
+
+    def opened(self):
+        where = {}
+        for name, browse in self.dialogs.items():
+            with mock.patch.object(qt.QFileDialog, "getOpenFileName", return_value=("", "")) as ask:
+                browse()
+            where[name] = ask.call_args[0][2]
+        return where
+
+    def test_a_dialog_opens_in_the_data_folder_until_a_file_is_named(self):
+        self.assertEqual(self.opened(), dict.fromkeys(self.dialogs, self.dir))
+        image = np.zeros((345, 345), dtype=np.int32)
+        self.tab._loaded(FRAME, image, 1e-3)
+        self.image._loaded(FRAME, image, 1e-3)
+        self.tab.dPath.setText("/c/x.D")
+        self.box.poni.setText("/p/x.poni")
+        self.assertEqual(self.opened(), {"frame": "/d", "start PONI": self.dir, "d spacings": "/c/x.D", "image": "/d",
+                                         "integration PONI": "/p/x.poni"})
 
 
 class ApplyTest(TestCaseQt):

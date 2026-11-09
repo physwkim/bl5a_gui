@@ -16,6 +16,7 @@ from silx.gui.colors import Colormap
 from silx.gui.plot import Plot2D
 
 from . import mar
+from .editor import dialog_dir
 from .plots import Loader
 
 # Cubic calibrants pyFAI ships, by lattice constant (Å) and the lattice
@@ -326,7 +327,7 @@ class CalibrationTab(qt.QWidget):
         self.loader.load(path)
 
     def _open(self):
-        here = os.path.dirname(self.frame[0] if self.frame else self.latest or "")
+        here = dialog_dir(os.path.dirname(self.frame[0] if self.frame else self.latest or ""))
         path, _ = qt.QFileDialog.getOpenFileName(self, "Calibrant frame", here, "mar345 (*.mar*);;All files (*)")
         if path:
             self.load(path)
@@ -352,7 +353,7 @@ class CalibrationTab(qt.QWidget):
                 self._setStart(INTEGRATOR, self.integratorPoni)
 
     def _loadPoni(self):
-        path, _ = qt.QFileDialog.getOpenFileName(self, "Start PONI", "", "PONI (*.poni);;All files (*)")
+        path, _ = qt.QFileDialog.getOpenFileName(self, "Start PONI", dialog_dir(), "PONI (*.poni);;All files (*)")
         if not path:
             return
         try:
@@ -385,7 +386,7 @@ class CalibrationTab(qt.QWidget):
         self._drawRings()
 
     def _browseD(self):
-        path, _ = qt.QFileDialog.getOpenFileName(self, "Calibrant d spacings", self.dPath.text(),
+        path, _ = qt.QFileDialog.getOpenFileName(self, "Calibrant d spacings", dialog_dir(self.dPath.text()),
                                                  "d spacings (*.D *.d);;All files (*)")
         if path:
             self.dPath.setText(path)
