@@ -36,6 +36,17 @@ const MOVE_TIMEOUT: Duration = Duration::from_secs(3600);
 /// `set` redefines the position; the readback follows on the next poll.
 const SET_TIMEOUT: Duration = Duration::from_secs(10);
 const POLL: Duration = Duration::from_millis(50);
+/// Motor steps a move may end from its target and count as arrived: SPEC
+/// leaves tth 2 steps short of an `umv` target. A stop or a limit is
+/// many more.
+const MOVE_SLOP: f64 = 3.0;
+
+/// How many motor steps apart `a` and `b` are, whole: the positions are
+/// multiples of `mres` with float noise, so 2 steps come out as 2, not
+/// 2.0000000000000004.
+fn steps_apart(a: f64, b: f64, mres: f64) -> f64 {
+    ((a - b) / mres).round().abs()
+}
 /// SPEC back at its prompt after a ^C.
 const READY_TIMEOUT: Duration = Duration::from_secs(30);
 /// mar345-ioc's task takes an Acquire on its next wake-up.
@@ -206,7 +217,7 @@ impl Axis {
         let deadline = tokio::time::Instant::now() + SET_TIMEOUT;
         loop {
             let rbv = self.position().await?;
-            if (rbv - pos).abs() <= 1.5 * self.mres {
+            if steps_apart(rbv, pos, self.mres) <= 1.0 {
                 return Ok(());
             }
             if tokio::time::Instant::now() >= deadline {
@@ -246,11 +257,11 @@ impl MovableObj for Axis {
     /// the macro on the wrong position otherwise.
     async fn set_dyn(&self, value: f64) -> Status {
         let (status, setter) = Status::new();
-        let (val, rbv, name, tol) = (
+        let (val, rbv, name, mres) = (
             self.val.clone(),
             self.rbv.clone(),
             self.name.clone(),
-            2.0 * self.mres,
+            self.mres,
         );
         tokio::spawn(async move {
             match tokio::time::timeout(MOVE_TIMEOUT, val.put(Some(value))).await {
@@ -261,9 +272,10 @@ impl MovableObj for Axis {
                 ))),
                 Ok(Err(e)) => setter.fail(StatusError::Failed(format!("{name} move: {e}"))),
                 Ok(Ok(())) => match get(&rbv).await {
-                    Ok(at) if (at - value).abs() <= tol => setter.success(),
+                    Ok(at) if steps_apart(at, value, mres) <= MOVE_SLOP => setter.success(),
                     Ok(at) => setter.fail(StatusError::Failed(format!(
-                        "{name} stopped at {at}, not {value}"
+                        "{name} stopped at {at}, not {value}: {} steps off",
+                        steps_apart(at, value, mres)
                     ))),
                     Err(e) => setter.fail(StatusError::Failed(format!("{name} readback: {e}"))),
                 },
@@ -869,6 +881,24 @@ impl Devices {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn steps_apart_is_whole_at_the_boundary() {
+        // tth's stops of 2026-11-09: 2 steps short, |difference| a hair over 2 MRES.
+        for (at, target) in [
+            (-0.028200000000000003, -0.028),
+            (0.027800000000000002, 0.028000000000000004),
+            (-0.020200000000000003, -0.02),
+        ] {
+            let (at, target): (f64, f64) = (at, target);
+            assert!((at - target).abs() > 2.0 * 0.0001, "{at} {target}");
+            assert_eq!(steps_apart(at, target, 0.0001), 2.0);
+        }
+        // shold's stops: SPEC's backlash, far outside the slop.
+        assert!(steps_apart(-1.752, -1.7, 0.002) > MOVE_SLOP);
+        assert_eq!(steps_apart(-1.752, -1.7, 0.002), 26.0);
+        assert_eq!(steps_apart(0.3, 0.3, 0.0001), 0.0);
+    }
 
     #[test]
     fn a_table_is_rows_of_its_columns() {

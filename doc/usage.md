@@ -127,7 +127,7 @@ move only with tth at 40 or above, and tth goes below 40 only with
 martran at 1200 or above. A move from the GUI or a plan that would break
 this is refused and the SPEC log says why, for example `marz move
 refused: tth 1 is below 40`. The motor stays where it was, so a plan
-fails (`martran stopped at 1234, not 1250`) and the MCP `tweak` returns
+fails (`martran stopped at 1234, not 1250: 16000 steps off`) and the MCP `tweak` returns
 an error. The motor's record has a MAJOR alarm until the motor next
 moves, and its setpoint goes back to the readback, so the next ◀ or ▶
 steps from where the motor is. SPEC's own moves (a macro, a command)
