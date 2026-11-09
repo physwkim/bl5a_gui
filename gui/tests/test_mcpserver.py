@@ -4,6 +4,7 @@ import types
 import anyio
 import numpy as np
 import pytest
+from repics import CaDisconnected, CaTimeout
 
 from bl5a_gui import config, items, mcpserver, sequences
 from bl5a_gui.mcpserver import InsituRow, Log, binned, clean
@@ -100,87 +101,120 @@ def test_tools_and_their_arguments():
     assert tools["stop_all"].annotations.destructive_hint
 
 
-class AbortPV:
-    def __init__(self, connected):
-        self.connected, self.puts = connected, []
+class FakePV:
+    """repics.pv.PV as Beamline uses it: a put returns nothing, a failure
+    raises `fails`."""
 
-    def put(self, value, wait):
+    def __init__(self, value=None, connected=True, fails=None):
+        self.pvname = "fake"
+        self.value, self.connected, self.fails, self.puts = value, connected, fails, []
+
+    def wait_for_connection(self, timeout):
+        return self.connected
+
+    def put(self, value, wait, timeout):
+        if self.fails is not None:
+            raise self.fails
         self.puts.append(value)
-        return 1
+
+    def get(self, timeout, use_monitor, as_string=False):
+        if self.fails is not None:
+            raise self.fails
+        return self.value
 
 
-def stop_all(monkeypatch, qs, connected=True):
-    """Beamline.stop_all with SPEC free and qs reporting `qs`."""
-    monkeypatch.setattr(mcpserver.epics.ca, "use_initial_context", lambda: None)
+def beamline(qs):
+    """A Beamline with SPEC free and qs reporting `qs`."""
     bl = mcpserver.Beamline("tcp://127.0.0.1:1", "tcp://127.0.0.1:2", "tcp://127.0.0.1:3", "tcp://127.0.0.1:4",
                             "test")
     bl.sync = lambda: None
     bl.qs = qs
     bl.spec = {"Connected": "Connected", "Busy": "Ready", "Cmd:Busy": "Idle"}
+    return bl
+
+
+def stop_all(qs, **abort):
+    """Beamline.stop_all with SPEC free, qs reporting `qs` and Cmd:Abort a
+    FakePV(**abort)."""
+    bl = beamline(qs)
     bl.after_frame.asked = True
-    bl.pvs[config.SPEC + "Cmd:Abort"] = pv = AbortPV(connected)
+    bl.pvs[config.SPEC + "Cmd:Abort"] = pv = FakePV(**abort)
     aborts = []
     bl.RE = types.SimpleNamespace(abort=lambda: aborts.append(1))
     return bl, bl.stop_all(), pv.puts, aborts
 
 
-def test_stop_all_sends_spec_ctrl_c_whatever_qs_does(monkeypatch):
+def test_stop_all_sends_spec_ctrl_c_whatever_qs_does():
     for qs in ({"re_state": "idle"}, None):
-        _, got, puts, aborts = stop_all(monkeypatch, qs)
+        _, got, puts, aborts = stop_all(qs)
         assert got == {"spec": "^C sent", "plan": "none running or paused"}, qs
         assert puts == [1] and aborts == [], qs
 
 
-def test_stop_all_aborts_a_running_or_paused_plan(monkeypatch):
+def test_stop_all_aborts_a_running_or_paused_plan():
     for state in ("executing_queue", "paused"):
-        bl, got, puts, aborts = stop_all(monkeypatch, {"re_state": state, "running_item_name": "mar_series"})
+        bl, got, puts, aborts = stop_all({"re_state": state, "running_item_name": "mar_series"})
         assert got == {"spec": "^C sent", "plan": "abort requested"}, state
         assert puts == [1] and aborts == [1], state
         assert not bl.after_frame.asked, state
 
 
-def test_stop_all_without_cmd_abort_still_aborts_and_says_so(monkeypatch):
-    bl, got, puts, aborts = stop_all(monkeypatch, {"re_state": "executing_queue"}, connected=False)
+@pytest.mark.parametrize("abort", [{"connected": False}, {"fails": CaDisconnected("disconnected", 24)}])
+def test_stop_all_without_cmd_abort_still_aborts_and_says_so(abort):
+    bl, got, puts, aborts = stop_all({"re_state": "executing_queue"}, **abort)
     assert puts == [] and aborts == [1]
     assert "SPEC got no ^C" in got["spec"] and got["plan"] == "abort requested"
     assert "SPEC got no ^C" in bl.messages.since(0, 10)["lines"][-1]
 
 
-class MotorPV:
-    def __init__(self, value=None):
-        self.value, self.puts = value, []
-
-    def put(self, value, wait, timeout):
-        self.puts.append(value)
-        return 1
-
-    def get(self, timeout, use_monitor):
-        return self.value
-
-
-def tweak(monkeypatch, msta):
-    """Beamline.tweak of tth with SPEC free, the record's MSTA `msta` after."""
-    monkeypatch.setattr(mcpserver.epics.ca, "use_initial_context", lambda: None)
-    bl = mcpserver.Beamline("tcp://127.0.0.1:1", "tcp://127.0.0.1:2", "tcp://127.0.0.1:3", "tcp://127.0.0.1:4",
-                            "test")
-    bl.sync = lambda: None
-    bl.qs = {"re_state": "idle"}
-    bl.spec = {"Connected": "Connected", "Busy": "Ready", "Cmd:Busy": "Idle"}
+def tweak(msta, **failing):
+    """Beamline.tweak of tth with SPEC free, the record's MSTA `msta` after;
+    `failing` maps a field to the FakePV kwargs it fails with."""
+    bl = beamline({"re_state": "idle"})
     base = config.SPEC + "tth"
-    pvs = {f: MotorPV(v) for f, v in ((".TWV", None), (".TWF", None), (".MSTA", msta), (".RBV", 81.0))}
+    pvs = {f: FakePV(v, **failing.get(f, {})) for f, v in ((".TWV", None), (".TWF", None), (".MSTA", msta),
+                                                           (".RBV", 81.0))}
     bl.pvs.update({base + f: pv for f, pv in pvs.items()})
     return bl, pvs
 
 
-def test_tweak_returns_the_readback_of_an_accepted_move(monkeypatch):
-    bl, pvs = tweak(monkeypatch, 0x2)
+def test_tweak_returns_the_readback_of_an_accepted_move():
+    bl, pvs = tweak(0x2)
     got = bl.tweak("tth", 0.5, "forward")
     assert got["rbv"] == 81.0 and pvs[".TWV"].puts == [0.5] and pvs[".TWF"].puts == [1]
     assert bl.spec_job is None
 
 
-def test_tweak_of_a_refused_move_is_an_error(monkeypatch):
-    bl, _ = tweak(monkeypatch, 0x2 | mcpserver.MSTA_PROBLEM)
+def test_tweak_of_a_refused_move_is_an_error():
+    bl, _ = tweak(0x2 | mcpserver.MSTA_PROBLEM)
     with pytest.raises(mcpserver.ToolError, match="SPEC refused the tth move"):
         bl.tweak("tth", 0.5, "forward")
+    assert bl.spec_job is None
+
+
+@pytest.mark.parametrize("field, fails, error", [
+    (".TWV", {"connected": False}, r"tth\.TWV: not connected"),
+    (".TWF", {"fails": CaTimeout("timed out after 300 s", 80)}, r"tth\.TWF: put not completed in 300 s"),
+    (".MSTA", {"fails": CaTimeout("timed out after 2 s", 80)}, r"tth\.MSTA: timed out after 2 s$"),
+])
+def test_tweak_whose_channel_fails_is_an_error(field, fails, error):
+    bl, _ = tweak(0x2, **{field: fails})
+    with pytest.raises(mcpserver.ToolError, match=error):
+        bl.tweak("tth", 0.5, "forward")
+    assert bl.spec_job is None
+
+
+def test_spec_command_whose_cmd_put_fails_ends():
+    bl = beamline({"re_state": "idle"})
+    for s in ("Cmd", "Cmd:Status", "Cmd:Reply"):
+        bl.pvs[config.SPEC + s] = FakePV(fails=CaDisconnected("disconnected", 24))
+    got = bl.spec_command("wa", 5.0)
+    assert got["cmd"] == "wa" and got["status"] == "no status" and bl.spec_job is None
+
+
+def test_spec_command_to_an_unconnected_cmd_is_an_error():
+    bl = beamline({"re_state": "idle"})
+    bl.pvs[config.SPEC + "Cmd"] = FakePV(connected=False)
+    with pytest.raises(mcpserver.ToolError, match="Cmd: not connected"):
+        bl.spec_command("wa", 5.0)
     assert bl.spec_job is None

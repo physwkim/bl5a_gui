@@ -493,7 +493,7 @@ coin_align, Thin film = align_in.mac)이 읽기 전용으로 있고, 이용자 �
 
 ## GUI
 
-Python Qt(silx.gui.qt + pyepics). bl7c `pal_tools`의 `bsrs_client.py`,
+Python Qt(silx.gui.qt + repics). bl7c `pal_tools`의 `bsrs_client.py`,
 `QueueView.py`, `Plot1DCustom.py`를 고치지 않고 `gui/bl5a_gui/vendor/`에 둔다.
 바탕화면의 **BL5A** 단축키가 `deploy/bl5a-gui`를 거쳐 `gui/run_gui.py`를 띄운다.
 

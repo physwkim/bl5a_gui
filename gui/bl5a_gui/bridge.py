@@ -9,11 +9,15 @@ import threading
 import time
 
 import zmq
+from repics import CaError
+from repics.pv import PV
 from silx.gui import qt
 
 from .vendor.bsrs_client import DocumentRelay, QsClient, QsError, RunEngineProxy
 
 logger = logging.getLogger(__name__)
+
+CONNECT_TIMEOUT = 2.0  # s, for a PV to connect before a put to it
 
 
 class QsPoller(qt.QThread):
@@ -194,7 +198,7 @@ class Integrator(qt.QObject):
 
 class PVs(qt.QObject):
     """Channel Access monitors as `changed(name, value, text)` and
-    `connected(name, bool)`; `text` is pyepics' char_value (an enum's
+    `connected(name, bool)`; `text` is the PV's char_value (an enum's
     state name, a char waveform's string)."""
 
     changed = qt.Signal(str, object, str)
@@ -202,9 +206,6 @@ class PVs(qt.QObject):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        import epics
-
-        self._epics = epics
         self.pvs = {}
 
     def watch(self, name):
@@ -212,8 +213,8 @@ class PVs(qt.QObject):
             # form="ctrl": with the default "time" form a monitor's
             # char_value of an enum is its index until the state names are
             # fetched some other way.
-            self.pvs[name] = self._epics.PV(name, auto_monitor=True, form="ctrl", callback=self._changed,
-                                            connection_callback=self._connected)
+            self.pvs[name] = PV(name, auto_monitor=True, form="ctrl", callback=self._changed,
+                                connection_callback=self._connected)
         return self.pvs.get(name)
 
     def _changed(self, pvname=None, value=None, char_value=None, **kw):
@@ -223,15 +224,34 @@ class PVs(qt.QObject):
         self.connected.emit(pvname, bool(conn))
 
     def put(self, name, value, callback=None):
-        """A put that does not wait; `callback()` (on a CA thread) at
-        completion when given."""
+        """A put that does not wait; `callback()` (on a helper thread) at
+        completion, or once the put has failed, when given."""
         pv = self.watch(name)
         if callback is None:
-            pv.put(value, wait=False)
+            try:
+                pv.put(value, wait=False, timeout=CONNECT_TIMEOUT)
+            except CaError as e:
+                logger.warning("%s: put %r: %s", name, value, e)
         else:
-            pv.put(value, wait=False, use_complete=True, callback=lambda **kw: callback())
+            threading.Thread(target=self._put_wait, args=(pv, value, callback), name="put " + name,
+                             daemon=True).start()
+
+    @staticmethod
+    def _put_wait(pv, value, callback):
+        """A put's timeout covers its connect too: the connect is bounded
+        first, then the completion waits as long as the record takes."""
+        try:
+            if pv.wait_for_connection(CONNECT_TIMEOUT):
+                pv.put(value, wait=True, timeout=None)
+            else:
+                logger.warning("%s: put %r: not connected", pv.pvname, value)
+        except CaError as e:
+            logger.warning("%s: put %r: %s", pv.pvname, value, e)
+        finally:
+            callback()
 
     def get_text(self, name, timeout=1.0):
-        pv = self.watch(name)
-        v = pv.get(as_string=True, timeout=timeout, use_monitor=False)
-        return "" if v is None else str(v)
+        try:
+            return str(self.watch(name).get(as_string=True, timeout=timeout, use_monitor=False))
+        except CaError:
+            return ""

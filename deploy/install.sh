@@ -75,7 +75,7 @@ for ioc in spec-ioc:target/release/spec-ioc mar345-ioc:target/mar345-ioc/bin/mar
 done
 rm -f "$probe"
 
-if ! "$python" -I -c 'import silx, PySide6, epics, zmq, msgpack, numpy, fabio' 2>/dev/null; then
+if ! "$python" -I -c 'import silx, PySide6, repics, zmq, msgpack, numpy, fabio' 2>/dev/null; then
     echo "WARNING: $python lacks the GUI's packages (doc/install.md, section 3)" >&2
 fi
 

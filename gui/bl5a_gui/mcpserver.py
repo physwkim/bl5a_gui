@@ -20,13 +20,14 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from typing import Annotated, Literal
 
-import epics
 import numpy as np
 import zmq
 from mcp.server.mcpserver import Image, MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp_types import ToolAnnotations
 from pydantic import BaseModel, ConfigDict, Field
+from repics import CaError, CaTimeout
+from repics.pv import PV
 
 from . import config, docs, gate, items, mar, peak, sequences
 from .speclog import LogLines
@@ -60,6 +61,7 @@ QS_KEYS = ("manager_state", "re_state", "worker_environment_exists", "items_in_q
 SCANS = 50  # finished and running scans kept
 ALIGNED = 200  # alignment history rows kept
 TWEAK_TIMEOUT = 300.0  # s, for one TWF/TWR move to complete
+CONNECT_TIMEOUT = 2.0  # s, for a PV to connect before a put to it
 MSTA_PROBLEM = 0x200  # motor record MSTA: the driver refused the request
 FRAME_PX = 1024  # frame_image's longest side
 
@@ -240,8 +242,7 @@ class Beamline:
     # -- life ------------------------------------------------------------
     def start(self):
         """PVs, the document relay and the polling threads. Called once the
-        stdio server serves: libca and pyepics write to stdout, which the
-        server has diverted from the wire by then."""
+        stdio server serves."""
         watched = [config.SPEC + s for s in gate.SPEC_STATE + ("Log",)]
         watched += [config.RING_PV, config.SHUTTER_PV, config.TEMP_SP_PV, config.TEMP_RBV_PV,
                     config.TEMP_RAMP_PV]
@@ -250,13 +251,13 @@ class Beamline:
             watched += [config.SPEC + m + "." + f for f in ("RBV", "DMOV", "TWV", "PREC", "EGU")]
         for name in watched:
             if name:
-                self.pvs[name] = epics.PV(name, auto_monitor=True, form="ctrl", callback=self._changed,
-                                          connection_callback=self._connected)
+                self.pvs[name] = PV(name, auto_monitor=True, form="ctrl", callback=self._changed,
+                                    connection_callback=self._connected)
         puts = [config.SPEC + s for s in ("Cmd", "Cmd:Status", "Cmd:Reply", "Cmd:Abort")]
         puts += [config.SPEC + m + f for m in config.MOTORS for f in (".TWF", ".TWR")]
         fresh = [config.SPEC + m + ".MSTA" for m in config.MOTORS]
         for name in puts + fresh:
-            self.pvs[name] = epics.PV(name, auto_monitor=False)
+            self.pvs[name] = PV(name, auto_monitor=False)
         self.relay.subscribe(self._document)
         self.relay.start()
         for target, name in ((self._poll, "bl5a-mcp-qs"), (self._integrator_pub, "bl5a-mcp-integrator")):
@@ -447,20 +448,37 @@ class Beamline:
         with self.lock:
             return self.values.get(name, (None, None))
 
+    def read(self, name, timeout=2.0):
+        """A fresh read, not the monitor's; raises if it fails."""
+        try:
+            return self.pvs[name].get(timeout=timeout, use_monitor=False)
+        except CaError as e:
+            raise ToolError("{}: {}".format(name, e.args[0])) from None
+
     def text(self, name, timeout=2.0):
-        """A fresh read, not the monitor's."""
-        epics.ca.use_initial_context()
-        v = self.pvs[name].get(as_string=True, timeout=timeout, use_monitor=False)
-        return "" if v is None else str(v)
+        """A fresh read, not the monitor's; "" when it fails."""
+        try:
+            return str(self.pvs[name].get(as_string=True, timeout=timeout, use_monitor=False))
+        except CaError:
+            return ""
+
+    def connected(self, name):
+        """`name`'s PV, connected. A put's timeout covers its connect too,
+        so a put waits for the connection here first."""
+        pv = self.pvs[name]
+        if not pv.wait_for_connection(CONNECT_TIMEOUT):
+            raise ToolError("{}: not connected".format(name))
+        return pv
 
     def put(self, name, value, timeout):
         """A put that waits for completion; raises unless it completed."""
-        epics.ca.use_initial_context()
-        r = self.pvs[name].put(value, wait=True, timeout=timeout)
-        if r is None:
-            raise ToolError("{}: not connected".format(name))
-        if r != 1:
-            raise ToolError("{}: put not completed in {:g} s".format(name, timeout))
+        pv = self.connected(name)
+        try:
+            pv.put(value, wait=True, timeout=timeout)
+        except CaTimeout:
+            raise ToolError("{}: put not completed in {:g} s".format(name, timeout)) from None
+        except CaError as e:
+            raise ToolError("{}: {}".format(name, e.args[0])) from None
 
     # -- SPEC --------------------------------------------------------------
     def _settle(self):
@@ -492,25 +510,29 @@ class Beamline:
         cmd = cmd.strip()
         if not cmd:
             raise ToolError("an empty command")
-        epics.ca.use_initial_context()
         with self.spec_lock:
             c = Command(cmd, time.time(), self.spec_log.last)
             self._claim(c)
-
-            def completed(**kw):
-                c.finished = time.time()
-                c.done.set()
-
             try:
-                r = self.pvs[config.SPEC + "Cmd"].put(cmd, wait=False, use_complete=True, callback=completed)
+                pv = self.connected(config.SPEC + "Cmd")
+                threading.Thread(target=self._send, args=(pv, c), name="bl5a-mcp-cmd", daemon=True).start()
             except Exception:
                 self.spec_job = None
                 raise
-            if r is None:
-                self.spec_job = None
-                raise ToolError(config.SPEC + "Cmd: not connected")
         c.done.wait(wait_s)
         return self.command_result(c)
+
+    @staticmethod
+    def _send(pv, c):
+        """`c` put to Cmd, done once SPEC has run it (no timeout: a
+        command may run for hours) or the put has failed."""
+        try:
+            pv.put(c.cmd, wait=True, timeout=None)
+        except CaError as e:
+            logger.warning("%s: %r: %s", pv.pvname, c.cmd, e)
+        finally:
+            c.finished = time.time()
+            c.done.set()
 
     def command_result(self, c=None):
         """`c`'s reply (the last command's when None), or that it still
@@ -525,25 +547,30 @@ class Beamline:
         return c.result
 
     def spec_abort(self):
-        epics.ca.use_initial_context()
+        name = config.SPEC + "Cmd:Abort"
         with self.spec_lock:
             self._settle()
             c = self.spec_job
             if not isinstance(c, Command):
                 raise ToolError("no command sent from this server is running; spec_abort interrupts only "
                                 "those, as the GUI's ^C does")
-            r = self.pvs[config.SPEC + "Cmd:Abort"].put(1, wait=False)
-            if r is None:
-                raise ToolError(config.SPEC + "Cmd:Abort: not connected")
+            try:
+                self.connected(name).put(1, wait=False, timeout=CONNECT_TIMEOUT)
+            except CaError as e:
+                raise ToolError("{}: {}".format(name, e.args[0])) from None
         return {"aborting": c.cmd}
 
     def stop_all(self):
         """The GUI's Stop all: SPEC's ^C, whoever started what SPEC runs,
         then an abort of the plan if one runs or is paused. The ^C goes
         first: reading qs can take seconds."""
-        epics.ca.use_initial_context()
         pv = self.pvs[config.SPEC + "Cmd:Abort"]
-        sent = pv.connected and pv.put(1, wait=False) is not None
+        sent = pv.connected
+        if sent:
+            try:
+                pv.put(1, wait=False, timeout=CONNECT_TIMEOUT)
+            except CaError:
+                sent = False
         self.sync()
         with self.lock:
             plan = gate.allowed(self.qs, self.spec, self.after_frame.asked)["abort"]
@@ -577,13 +604,13 @@ class Beamline:
             self.put(base + ".TWV", step, 5.0)
             # A put to TWF/TWR completes when the move does (DMOV 0 → 1).
             self.put(base + (".TWF" if direction == "forward" else ".TWR"), 1, TWEAK_TIMEOUT)
-            msta = self.pvs[base + ".MSTA"].get(timeout=2.0, use_monitor=False)
-            rbv = self.pvs[base + ".RBV"].get(timeout=2.0, use_monitor=False)
+            msta = self.read(base + ".MSTA")
+            rbv = self.read(base + ".RBV")
         finally:
             with self.spec_lock:
                 self.spec_job = None
         # A refused move completes the put too, with the motor where it was.
-        if msta is not None and int(msta) & MSTA_PROBLEM:
+        if int(msta) & MSTA_PROBLEM:
             raise ToolError("SPEC refused the {} move; spec_log says why".format(motor))
         return {"motor": motor, "direction": direction, "step": step, "rbv": sig(rbv),
                 "unit": self.value(base + ".EGU")[1], "seconds": round(time.time() - t0, 2)}
