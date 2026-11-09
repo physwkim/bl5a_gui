@@ -293,6 +293,8 @@ class StackTab(qt.QWidget):
         self.series = qt.QComboBox()
         self.series.setSizeAdjustPolicy(qt.QComboBox.AdjustToContents)
         self.refresh = qt.QPushButton("Refresh")
+        self.follow = qt.QCheckBox("Follow new rows")
+        self.follow.setChecked(True)
         self.yaxis = qt.QComboBox()
         self.yaxis.addItems(["frame #", "time [min]"])
         self.th = qt.QComboBox()
@@ -312,8 +314,8 @@ class StackTab(qt.QWidget):
         self.logI = qt.QCheckBox("log I")
         self.logI.setChecked(True)
         top = qt.QHBoxLayout()
-        for w in (qt.QLabel("Stack"), self.series, self.refresh, qt.QLabel("y"), self.yaxis, self.th,
-                  self.logI, self.mode, self.last, self.offset):
+        for w in (qt.QLabel("Stack"), self.series, self.refresh, self.follow, qt.QLabel("y"), self.yaxis,
+                  self.th, self.logI, self.mode, self.last, self.offset):
             top.addWidget(w)
         top.addStretch()
         self.heat = Plot2D(self)
@@ -372,7 +374,7 @@ class StackTab(qt.QWidget):
                 self.series.addItem("{} — {}".format(s.get("series"), posixpath.join(
                     posixpath.basename(posixpath.dirname(path)), posixpath.basename(path))), path)
             paths = [s.get("path") for s in stacks]
-            for want in (keep, self.latest):
+            for want in (self.latest, keep) if self.follow.isChecked() else (keep, self.latest):
                 if want in paths:
                     self.series.setCurrentIndex(paths.index(want))
                     break
@@ -401,14 +403,17 @@ class StackTab(qt.QWidget):
             return
         path = body.get("path")
         self.latest = path
-        if self.series.findData(path) < 0:
-            # A new stack: list it. The tab stays on the stack shown, and
-            # shows this one when none was.
+        k = self.series.findData(path)
+        if k < 0:
+            # A new stack: list it; the list's reply shows it when following.
             self.integrator.request("stacks")
-            return
-        entry = self.data.get(path)
-        if entry is not None:
-            self.integrator.request("history", path=path, **{"from": len(entry["rows"])})
+        elif self.follow.isChecked() and path != self.current():
+            self.series.setCurrentIndex(k)
+            self._select()
+        else:
+            entry = self.data.get(path)
+            if entry is not None:
+                self.integrator.request("history", path=path, **{"from": len(entry["rows"])})
 
     def _ths(self, entry):
         keep = self.th.currentText()
