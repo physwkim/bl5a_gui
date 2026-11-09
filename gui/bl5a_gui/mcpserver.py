@@ -150,15 +150,17 @@ class Log:
 
 @dataclass
 class Command:
-    """A SPEC command sent through Cmd; `done` is set by the put's
-    completion callback, `result` by the settle that read its reply.
-    `log_from` is the SPEC log's last line when it was sent: what the
-    command prints goes to the log, not to Cmd:Reply."""
+    """A SPEC command sent through Cmd; `done` is set once its put has
+    ended, `error` before it if the put failed, and `result` by the
+    settle that read its reply. `log_from` is the SPEC log's last line
+    when it was sent: what the command prints goes to the log, not to
+    Cmd:Reply."""
     cmd: str
     sent: float
     log_from: int
     done: threading.Event = field(default_factory=threading.Event)
     finished: float = None
+    error: str = None
     result: dict = None
 
 
@@ -479,10 +481,13 @@ class Beamline:
         c = self.spec_job
         if not isinstance(c, Command) or not c.done.is_set():
             return
-        status = self.text(config.SPEC + "Cmd:Status")
-        reply = self.text(config.SPEC + "Cmd:Reply")
-        c.result = {"cmd": c.cmd, "status": status or "no status", "reply": reply.rstrip("\n"),
-                    "seconds": round((c.finished or time.time()) - c.sent, 3), "spec_log_since": c.log_from}
+        c.result = {"cmd": c.cmd, "seconds": round(c.finished - c.sent, 3), "spec_log_since": c.log_from}
+        if c.error is not None:
+            # Cmd:Status and Cmd:Reply are a previous command's then.
+            c.result["error"] = c.error
+        else:
+            c.result["status"] = self.text(config.SPEC + "Cmd:Status") or "no status"
+            c.result["reply"] = self.text(config.SPEC + "Cmd:Reply").rstrip("\n")
         self.spec_job = None
         self.last_command = c
 
@@ -501,27 +506,35 @@ class Beamline:
         cmd = cmd.strip()
         if not cmd:
             raise ToolError("an empty command")
+        line = config.spec_line(cmd)
         with self.spec_lock:
             c = Command(cmd, time.time(), self.spec_log.last)
             self._claim(c)
-            name = config.SPEC_CMD
             try:
-                # Sent here, so a Cmd that cannot be sent raises; the
-                # callback has no timeout, as a command may run for hours.
-                self.pvs[name].put(config.spec_line(cmd), callback=self._finished, callback_data=c)
-            except Exception as e:
+                threading.Thread(target=self._send, args=(c, line), name="bl5a-mcp-cmd", daemon=True).start()
+            except BaseException:
                 self.spec_job = None
-                if isinstance(e, CaError):
-                    raise ToolError("{}: {}".format(name, e.args[0])) from None
                 raise
         c.done.wait(wait_s)
-        return self.command_result(c)
+        got = self.command_result(c)
+        if "error" in got:
+            raise ToolError(got["error"])
+        return got
 
-    @staticmethod
-    def _finished(data, **kw):
-        """Command `data` done: SPEC has run it or the put has failed."""
-        data.finished = time.time()
-        data.done.set()
+    def _send(self, c, line):
+        """Put `line`, command `c`, to Cmd and end `c` when the put does.
+        Only a put that waits raises a failure the server sends after
+        taking it, so this put waits; with no timeout, as a command may run
+        for hours."""
+        name = config.SPEC_CMD
+        try:
+            self.pvs[name].put(line, wait=True, timeout=None)
+        except Exception as e:  # unclassified, `c` would show the previous command's status
+            c.error = "{}: {}".format(name, e.args[0] if isinstance(e, CaError) else repr(e))
+            logger.warning("%r: %s", c.cmd, c.error)
+        finally:
+            c.finished = time.time()
+            c.done.set()
 
     def command_result(self, c=None):
         """`c`'s reply (the last command's when None), or that it still
@@ -918,8 +931,8 @@ def build(bl):
 
     @tool(read_only=True)
     def spec_result():
-        """The reply of the last SPEC command sent from here, or how long it
-        has been running."""
+        """The reply of the last SPEC command sent from here, why its write
+        to SPEC failed, or how long it has been running."""
         return out(bl.command_result())
 
     # -- queueing --------------------------------------------------------
@@ -1163,7 +1176,7 @@ def build(bl):
         wait_s for its status and reply. What it prints (wm, wa, …) goes to
         the SPEC log: spec_log(since=spec_log_since). Only while SPEC is
         free; a command still running after wait_s keeps SPEC: spec_result
-        waits for it."""
+        waits for it. A write to SPEC that fails is an error."""
         return out(bl.spec_command(cmd, wait_s))
 
     @tool(destructive=True)

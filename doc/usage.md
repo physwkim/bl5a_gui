@@ -786,10 +786,12 @@ The rules are the GUI's:
   `stop_after_frame` ends a series after the frame being taken; asked
   before the first frame starts, the series stops with none.
 - `spec_command` waits up to `wait_s` (default 30 s); a longer command
-  comes back as running, and `spec_result` gives its end. What SPEC
-  prints (the table of `wm`, for example) goes to the SPEC log, not the
-  reply: read it with `spec_log` from the `spec_log_since` the result
-  gives.
+  comes back as running, and `spec_result` gives its end. A command
+  whose write to SPEC fails is an error, or, once it has come back as
+  running, an `error` in place of `status` and `reply` in `spec_result`;
+  the MCP server's log has it too. What SPEC prints (the table of `wm`,
+  for example) goes to the SPEC log, not the reply: read it with
+  `spec_log` from the `spec_log_since` the result gives.
 - The logs hold what happened since the server started. Each read gives
   `last`; pass it as `since` next time to get only the new lines.
 

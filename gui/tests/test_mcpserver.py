@@ -4,7 +4,7 @@ import types
 import anyio
 import numpy as np
 import pytest
-from repics import CaDisconnected, CaTimeout
+from repics import CaDisconnected, CaError, CaTimeout
 
 from bl5a_gui import config, items, mcpserver, sequences
 from bl5a_gui.mcpserver import InsituRow, Log, binned, clean
@@ -104,11 +104,12 @@ def test_tools_and_their_arguments():
 
 class FakePV:
     """repics.pv.PV as Beamline uses it: a put returns nothing and calls
-    back once sent, a failure raises `fails`."""
+    back once done, a failure to send raises `fails`; the server fails a
+    sent put with `refused`, which only a put with wait=True raises."""
 
-    def __init__(self, value=None, connected=True, fails=None):
+    def __init__(self, value=None, connected=True, fails=None, refused=None):
         self.pvname = "fake"
-        self.value, self.connected, self.fails, self.puts = value, connected, fails, []
+        self.value, self.connected, self.fails, self.refused, self.puts = value, connected, fails, refused, []
 
     def put(self, value, wait=False, timeout=30.0, callback=None, callback_data=None):
         if self.fails is not None:
@@ -116,6 +117,8 @@ class FakePV:
         self.puts.append(value)
         if callback is not None:
             callback(pvname=self.pvname, data=callback_data)
+        if wait and self.refused is not None:
+            raise self.refused
 
     def get(self, timeout, use_monitor, as_string=False):
         if self.fails is not None:
@@ -204,8 +207,7 @@ def test_tweak_whose_channel_fails_is_an_error(field, fails, error):
     assert bl.spec_job is None
 
 
-def test_spec_command_ends_once_its_put_calls_back():
-    # repics calls back when the server completes the put or fails it.
+def test_spec_command_ends_once_its_put_does():
     bl = beamline({"re_state": "idle"})
     bl.pvs[config.SPEC_CMD] = cmd = FakePV()
     for s in ("Cmd:Status", "Cmd:Reply"):
@@ -224,6 +226,20 @@ def test_spec_command_sends_a_line_past_39_characters_as_a_char_array():
     line = "wm martran marsdd marz marshut marx ipbsx ipbsy"
     bl.spec_command(line, 5.0)
     assert cmd.puts[0].dtype == np.uint8 and cmd.puts[0].tobytes() == line.encode() + b"\0"
+
+
+def test_spec_command_whose_put_the_server_fails_is_an_error_and_logged(caplog):
+    # Cmd:Status is then the previous command's.
+    bl = beamline({"re_state": "idle"})
+    bl.pvs[config.SPEC_CMD] = FakePV(refused=CaError("Put operation failed", 160))
+    for s in ("Cmd:Status", "Cmd:Reply"):
+        bl.pvs[config.SPEC + s] = FakePV("OK")
+    with pytest.raises(mcpserver.ToolError, match=r"Cmd\.VAL\$: Put operation failed$"):
+        bl.spec_command("wa", 5.0)
+    assert bl.spec_job is None
+    assert "'wa'" in caplog.text and "Put operation failed" in caplog.text
+    got = bl.command_result()
+    assert got["error"].endswith("Put operation failed") and "status" not in got
 
 
 def test_spec_command_to_an_unconnected_cmd_is_an_error():
