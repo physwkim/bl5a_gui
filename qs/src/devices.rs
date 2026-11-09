@@ -684,7 +684,8 @@ pub struct MarCam {
     file_path: Arc<EpicsCaBackend<String>>,
     file_path_exists: Arc<EpicsCaBackend<bool>>,
     file_name: Arc<EpicsCaBackend<String>>,
-    /// A bo: its put completes on the write, not with the frame.
+    /// A bo whose put completes on the write (mar345-ioc) or with the
+    /// frame, a minute or two later (ADmar345): not bounded by PUT_TIMEOUT.
     acquire: Arc<EpicsCaBackend<bool>>,
     /// 1 from the task taking the frame to its end, scanned or not.
     acquire_rbv: Arc<EpicsCaBackend<bool>>,
@@ -752,7 +753,7 @@ impl MarCam {
     /// until the frame is over. A frame that did not scan is an error.
     pub async fn acquire(&self) -> BResult<()> {
         let frames = get(&self.array_counter).await?;
-        put(&self.acquire, true).await?;
+        self.acquire.put(Some(true)).await?;
         // Acquire_RBV can still read the 0 from before the put; a frame
         // that came and went between two reads still counted.
         let take_by = tokio::time::Instant::now() + TAKE_TIMEOUT;
