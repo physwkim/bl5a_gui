@@ -25,6 +25,8 @@ const MODES: [(&str, &str); 3] = [
 ];
 /// mymar's `do_sleep(2)` after its set-up and after each frame.
 const SETTLE: f64 = 2.0;
+/// mymar's `fi 0 1 0 0`: the PFCU0 blades the frames are taken behind.
+const FILTERS: [u8; 4] = [0, 1, 0, 0];
 /// mymar_in's th list and frame exposure (`0.7*Texpo`, Texpo −1e5).
 const TH_LIST: [f64; 4] = [-0.05, 0.11, 0.13, 0.15];
 const IN_TEXPO: f64 = -7e4;
@@ -38,6 +40,8 @@ struct Series {
     n: usize,
     /// The scan mode's macro, `(name, texpo)`.
     expose: &'static str,
+    /// `fi`'s four PFCU0 blades, 0 or 1 each.
+    filters: [u8; 4],
 }
 
 /// mymar: `n` frames, frame `i` from `i·Ti` after the first. Once set up
@@ -48,7 +52,8 @@ async fn series(ops: &Ops<'_>, s: &Series) -> Step {
     ops.umv(&[("scell", 0.0)]).await?;
     ops.spec("counters 2 3").await?;
     ops.spec("mar345closeshutter").await?;
-    ops.spec("fi 0 1 0 0").await?;
+    let blades: Vec<String> = s.filters.iter().map(u8::to_string).collect();
+    ops.spec(&format!("fi {}", blades.join(" "))).await?;
     ops.spec("ic_range 4").await?;
     ops.sleep(SETTLE).await?;
     ops.umv(&[("scell", 0.0)]).await?;
@@ -212,7 +217,7 @@ impl Temperature {
 
 fn register_series(reg: &mut Registry, devices: &Devices, root: &Path) {
     const PLAN: &str = "mar_series";
-    const NAMES: &[&str] = &["name", "ti", "texpo", "n", "mode", "md"];
+    const NAMES: &[&str] = &["name", "ti", "texpo", "n", "mode", "filters", "md"];
     let (dev, data_root) = (devices.clone(), root.to_path_buf());
     let factory: PlanFactory = Arc::new(move |_reg, raw| {
         let args = Args::parse(PLAN, NAMES, raw)?;
@@ -231,12 +236,30 @@ fn register_series(reg: &mut Registry, devices: &Devices, root: &Path) {
             let known: Vec<_> = MODES.iter().map(|(k, _)| *k).collect();
             format!("{PLAN}: mode must be one of {known:?}, got {key:?}")
         })?;
+        let filters = if args.given("filters") {
+            let v = args.f64_list("filters")?;
+            let blades: Option<Vec<u8>> = v
+                .iter()
+                .map(|&x| (x == 0.0 || x == 1.0).then_some(x as u8))
+                .collect();
+            match blades.as_deref() {
+                Some(&[a, b, c, d]) => [a, b, c, d],
+                _ => {
+                    return Err(format!(
+                        "{PLAN}: filters must be four blades of 0 or 1, got {v:?}"
+                    ));
+                }
+            }
+        } else {
+            FILTERS
+        };
         let s = Series {
             name,
             period: ti * 60.0,
             texpo,
             n,
             expose,
+            filters,
         };
         let extra = json!({
             "detectors": ["scaler"],
@@ -247,6 +270,7 @@ fn register_series(reg: &mut Registry, devices: &Devices, root: &Path) {
             "num_points": n,
             "mode": key,
             "expose": expose,
+            "filters": filters,
         });
         let (md, place) = item_md(PLAN, &data_root, extra, args.md()?)?;
         let dev = dev.clone();
@@ -289,6 +313,10 @@ fn register_series(reg: &mut Registry, devices: &Devices, root: &Path) {
                         ),
                     ),
                     "'static'",
+                ),
+                optional(
+                    param("filters", "list", "fi's four PFCU0 blades, 0 or 1 each."),
+                    "[0, 1, 0, 0]",
                 ),
                 optional(param("md", "dict", "Extra start-document metadata."), "{}"),
             ],

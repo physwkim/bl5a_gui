@@ -279,6 +279,7 @@ The Battery form queues `mar_series`: SPEC's `mymar1` (one frame) or
 | N | whole number, at least 1 | Repeat only: the number of frames |
 | Ti [min] | more than 2.5 | Repeat only: from one frame's start to the next |
 | Scan mode | `static`, `rocking1`, `rocking2` | the macro each frame is taken with: `mar345expose` (still), `mar345_lab6` (th and phi rock from −1° to +1°), `mar345_lab6_wide` (−5° to +5°) |
+| Filters | four blades, `0` or `1` each | SPEC's `fi` before the frames: the PFCU0 filters, default `0 1 0 0` |
 | Series | a folder name ([Data](#data)) | the data folder and stack the frames go to; empty means the file name |
 
 ![Repeat: twelve frames, ten minutes apart](img/battery-repeat.png)
@@ -295,7 +296,7 @@ motors: the frames are taken where they stand.
 
 What a `mar_series` does, in order:
 
-1. `mar345closeshutter`, `scell` to 0, `counters 2 3`, `fi 0 1 0 0`,
+1. `mar345closeshutter`, `scell` to 0, `counters 2 3`, `fi <filters>`,
    `ic_range 4`, a 2 s wait, `scell` to 0.
 2. For each frame: the item's data folder goes to the mar345 IOC's
    FilePath, then the scan mode's macro (`mar345expose`, `mar345_lab6`

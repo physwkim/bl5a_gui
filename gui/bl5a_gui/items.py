@@ -17,6 +17,8 @@ from .docs import outcome
 # mar_series's scan modes: mar345expose, mar345_lab6 (th and phi rock
 # over ±1° during the exposure), mar345_lab6_wide (±5°).
 MODES = ("static", "rocking1", "rocking2")
+# mymar's `fi 0 1 0 0`: the PFCU0 filter blades the frames are taken behind.
+FILTERS = (0, 1, 0, 0)
 TH_LIST = (-0.05, 0.11, 0.13, 0.15)
 IN_TEXPO = -7e4
 # changec's DELTA_K in the sixc state; qs's default.
@@ -130,7 +132,15 @@ def folder(item):
     return posixpath.join(str(root), name) if root else name
 
 
-def mar_series(name, texpo, mode="static", n=1, ti=None, series=None):
+def blades(v, field):
+    """`fi`'s four PFCU0 blades, 0 or 1 each, from "0 1 0 0" or a list."""
+    values = numbers(v, field) if isinstance(v, str) else list(v)
+    if len(values) != 4 or any(isinstance(x, bool) or x not in (0, 1) for x in values):
+        raise Invalid("{}: four blades, 0 or 1 each, got {!r}".format(field, v))
+    return [int(x) for x in values]
+
+
+def mar_series(name, texpo, mode="static", filters=FILTERS, n=1, ti=None, series=None):
     """mymar1 (n = 1, ti None) or mymar (n frames, one every ti minutes)."""
     kwargs = {"name": file_name(name, "filename")}
     texpo = exposure(texpo, "Texpo")
@@ -141,6 +151,7 @@ def mar_series(name, texpo, mode="static", n=1, ti=None, series=None):
     if mode not in MODES:
         raise Invalid("mode: one of {}, got {!r}".format(", ".join(MODES), mode))
     kwargs["mode"] = mode
+    kwargs["filters"] = blades(filters, "Filters")
     kwargs["n"] = n = count(n, "N")
     if ti is not None:
         ti = number(ti, "Ti")
@@ -478,7 +489,7 @@ def describe(item):
     shown = []
     if "blocks" in kw and "sequence" not in kw:
         shown.append("blocks={}".format(len(kw["blocks"]) if isinstance(kw["blocks"], list) else "?"))
-    for k in ("sequence", "T", "ramp", "wait", "tolerance", "soak", "n", "ti", "texpo", "mode", "th_list",
+    for k in ("sequence", "T", "ramp", "wait", "tolerance", "soak", "n", "ti", "texpo", "mode", "filters", "th_list",
               "motor", "start", "finish", "intervals", "time", "relative", "counter"):
         if k in kw:
             v = kw[k]

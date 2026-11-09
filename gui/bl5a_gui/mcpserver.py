@@ -1009,6 +1009,9 @@ def build(bl):
                                                                                  "frame; rocking1: mar345_lab6, th "
                                                                                  "and phi rock over ±1°; rocking2: "
                                                                                  "mar345_lab6_wide, ±5°")] = "static",
+                         filters: Annotated[list[int], Field(min_length=4, max_length=4,
+                                                             description="fi: the four PFCU0 filter blades, 0 or 1 "
+                                                                         "each")] = [0, 1, 0, 0],
                          n: Annotated[int, Field(ge=1, description="frames; more than 1 needs ti")] = 1,
                          ti: Annotated[float | None, Field(description="minutes from one frame's start to the "
                                                                        "next, more than 2.5")] = None,
@@ -1021,7 +1024,7 @@ def build(bl):
         if not beamstop_in_place:
             raise ToolError("the frames are taken with the shutter open: queue them once the operator confirms "
                             "the beamstop is in place")
-        return out(bl.add([items.mar_series(name, texpo, mode, n=n, ti=ti, series=series)], data_folder))
+        return out(bl.add([items.mar_series(name, texpo, mode, filters, n=n, ti=ti, series=series)], data_folder))
 
     @tool()
     def queue_insitu(rows: Annotated[list[InsituRow], Field(min_length=1)],

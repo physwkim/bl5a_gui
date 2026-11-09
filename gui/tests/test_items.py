@@ -34,7 +34,17 @@ class MarSeriesTest(unittest.TestCase):
         item = items.mar_series("ZnFC_Pcell_1Vdelithi", 3)
         self.assertEqual(item, {"item_type": "plan", "name": "mar_series", "args": [],
                                 "kwargs": {"name": "ZnFC_Pcell_1Vdelithi", "texpo": 3.0, "mode": "static",
-                                           "n": 1, "md": {"series": "ZnFC_Pcell_1Vdelithi"}}})
+                                           "filters": [0, 1, 0, 0], "n": 1,
+                                           "md": {"series": "ZnFC_Pcell_1Vdelithi"}}})
+
+    def test_filters(self):
+        self.assertEqual(items.mar_series("f", 2, filters="1 0 1 1")["kwargs"]["filters"], [1, 0, 1, 1])
+        self.assertEqual(items.mar_series("f", 2, filters=[0, 0, 0, 0])["kwargs"]["filters"], [0, 0, 0, 0])
+        self.assertEqual(items.describe(items.mar_series("f", 2, filters="1,1,0,0"))[2],
+                         "n=1 texpo=2 mode=static filters=1/1/0/0")
+        for bad in ("0 1 0", "0 1 0 0 0", "0 2 0 0", "a b c d", "", [True, 0, 0, 0], [0.5, 0, 0, 0]):
+            with self.subTest(filters=bad), self.assertRaisesRegex(Invalid, "^Filters: "):
+                items.mar_series("f", 2, filters=bad)
 
     def test_repeat(self):
         kw = items.mar_series("AgFC", -2e5, "rocking1", n=40, ti=3, series="cell_7")["kwargs"]
