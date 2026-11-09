@@ -1,5 +1,6 @@
 """ScanTab's markers: a stage's scan shows the statistics the stage moved
-by, which are of its outlier-filtered points, not of the points drawn.
+by, which are of its outlier-filtered points, not of the points drawn;
+the lines carry no text, their names in the stats line are their key.
 The curve plots leave room above and below their points."""
 
 import math
@@ -33,9 +34,17 @@ class ScanTabTest(unittest.TestCase):
     def tearDown(self):
         self.tab.deleteLater()
 
+    def lines(self):
+        return [m for m in self.tab.plot.getItems() if hasattr(m, "getXPosition") and not hasattr(m, "getXData")]
+
     def marks(self):
-        return {m.getLegend(): m.getXPosition() for m in self.tab.plot.getItems()
-                if hasattr(m, "getXPosition") and not hasattr(m, "getXData")}
+        return {m.getLegend(): m.getXPosition() for m in self.lines()}
+
+    def shown(self):
+        """The stats line as it reads on screen."""
+        doc = qt.QTextDocument()
+        doc.setHtml(self.tab.stats.text())
+        return doc.toPlainText()
 
     def assertClear(self, plot):
         lo, hi = plot.getYAxis().getLimits()
@@ -61,7 +70,25 @@ class ScanTabTest(unittest.TestCase):
         self.tab.stage(self.scan, stage)
         m = self.marks()
         self.assertEqual((m["CEN"], m["COM"], m["MAX"], m["target"]), (f.cen, f.com, f.xpk, f.cen))
-        self.assertIn("(1 outlier replaced)", self.tab.stats.text())
+        self.assertIn("(1 outlier replaced)", self.shown())
+
+    def test_lines_carry_no_text_and_the_stats_line_is_their_key(self):
+        f = peak.stats(X, FILTERED)
+        stage = {"pick": "CEN", "target": f.cen, "cen": f.cen, "com": f.com, "xmax": f.xpk, "fwhm": f.fwhm,
+                 "ymax": f.ymax, "rejected": 0}
+        self.tab.stage(self.scan, stage)
+        self.assertEqual(sorted(self.marks()), ["CEN", "COM", "MAX", "target"])
+        self.assertEqual([m.getText() for m in self.lines() if m.getText()], [])
+        for _, name, color in plots.MARKERS:
+            self.assertIn('<span style="color:{}">{}</span>'.format(color, name), self.tab.stats.text())
+        self.assertIn('<span style="color:{}">→ CEN</span>'.format(plots.TARGET_COLOR), self.tab.stats.text())
+
+    def test_a_reason_reads_as_written(self):
+        self.scan.exit_status, self.scan.reason = "fail", "th <limit> & stopped"
+        self.tab.start(self.scan)
+        self.tab.stop(self.scan)
+        self.assertTrue(self.shown().endswith("(fail: th <limit> & stopped)"), self.shown())
+        self.assertEqual(self.shown(), self.tab.stats.toolTip())
 
     def test_dip_stage_names_its_minimum(self):
         f = peak.stats(X, FILTERED)
@@ -71,8 +98,8 @@ class ScanTabTest(unittest.TestCase):
         m = self.marks()
         self.assertEqual((m["MIN"], m["target"]), (f.xpk, f.xpk))
         self.assertNotIn("MAX", m)
-        self.assertIn("DIP {:.5g} at".format(f.ymax), self.tab.stats.text())
-        self.assertIn("→ pl_xMAX dip", self.tab.stats.text())
+        self.assertIn("DIP {:.5g} at".format(f.ymax), self.shown())
+        self.assertIn("→ pl_xMAX dip", self.shown())
 
     def test_stage_with_nothing_replaced_or_a_null_statistic(self):
         f = peak.stats(X, FILTERED)
@@ -80,8 +107,9 @@ class ScanTabTest(unittest.TestCase):
                  "ymax": f.ymax, "rejected": 0}
         self.tab.stage(self.scan, stage)
         self.assertNotIn("COM", self.marks())
-        self.assertNotIn("outlier", self.tab.stats.text())
-        self.assertTrue(math.isnan(float(self.tab.stats.text().split("COM ")[1].split()[0])))
+        self.assertNotIn(">COM</span>", self.tab.stats.text(), "no key to a line not drawn")
+        self.assertNotIn("outlier", self.shown())
+        self.assertTrue(math.isnan(float(self.shown().split("COM ")[1].split()[0])))
 
 
 if __name__ == "__main__":

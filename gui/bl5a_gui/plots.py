@@ -1,6 +1,7 @@
 """The centre tabs: the scan being drawn, the latest mar345 frame and the
 integrated stacks."""
 
+import html
 import math
 import posixpath
 import threading
@@ -14,6 +15,7 @@ from . import config, docs, mar, peak
 from .vendor.Plot1DCustom import Plot1DCustom
 
 MARKERS = (("cen", "CEN", "#d62728"), ("com", "COM", "#2ca02c"), ("xpk", "MAX", "#1f77b4"))
+TARGET_COLOR = "black"
 # Room above and below the curves, as a fraction of their y range, so no
 # point sits on the frame.
 Y_MARGINS = (0.0, 0.0, 0.05, 0.05)
@@ -33,6 +35,7 @@ class ScanTab(qt.QWidget):
         self.scans = qt.QComboBox()
         self.scans.setSizeAdjustPolicy(qt.QComboBox.AdjustToContents)
         self.stats = qt.QLabel()
+        self.stats.setTextFormat(qt.Qt.RichText)
         self.stats.setTextInteractionFlags(qt.Qt.TextSelectableByMouse)
         # A failed scan's reason can be long: clipped here, whole in the tooltip.
         self.stats.setSizePolicy(qt.QSizePolicy.Ignored, qt.QSizePolicy.Preferred)
@@ -61,7 +64,7 @@ class ScanTab(qt.QWidget):
         self.scans.clear()
         self.scans.addItems([s.title for s, _ in self.kept])
         self.scans.setCurrentIndex(len(self.kept) - 1)
-        self._say("running")
+        self._say([("running", None)])
         self._draw(scan, None)
 
     def point(self, scan):
@@ -114,31 +117,40 @@ class ScanTab(qt.QWidget):
             st = peak.Stats(*(math.nan if stage.get(k) is None else float(stage[k])
                               for k in ("xmax", "ymax", "com", "cen", "fwhm")))
         if st is None:
-            self._say("no points" + (" ({})".format(docs.outcome(scan.exit_status, scan.reason))
-                                     if scan.exit_status else ""))
+            self._say([("no points" + (" ({})".format(docs.outcome(scan.exit_status, scan.reason))
+                                       if scan.exit_status else ""), None)])
             return
         # A dip's statistics are of the scan turned over: its maximum is
         # the dip's depth, at the scan's minimum.
         dip = stage is not None and bool(stage.get("dip"))
-        for key, label, color in MARKERS:
-            v = getattr(st, key)
-            label = "MIN" if dip and key == "xpk" else label
+        # The lines carry no text, which overlaps on a narrow peak: the
+        # line's name in the stats line, in its colour, is its key.
+        key = {}
+        for k, label, color in MARKERS:
+            v = getattr(st, k)
             if math.isfinite(v):
-                plot.addXMarker(v, legend=label, text=label, color=color)
-        text = "CEN {:.5g}  FWHM {:.4g}  COM {:.5g}  {} {:.5g} at {:.5g}".format(
-            st.cen, st.fwhm, st.com, "DIP" if dip else "MAX", st.ymax, st.xpk)
+                plot.addXMarker(v, legend="MIN" if dip and k == "xpk" else label, color=color)
+                key[k] = color
+        line = [("CEN", key.get("cen")), (" {:.5g}  FWHM {:.4g}  ".format(st.cen, st.fwhm), None),
+                ("COM", key.get("com")), (" {:.5g}  ".format(st.com), None),
+                ("DIP" if dip else "MAX", key.get("xpk")), (" {:.5g} at {:.5g}".format(st.ymax, st.xpk), None)]
         if stage is not None and stage.get("target") is not None:
-            plot.addXMarker(stage["target"], legend="target", text=docs.pick(stage), color="black")
-            text += "  → {} {:.5g}".format(docs.pick(stage), stage["target"])
+            plot.addXMarker(stage["target"], legend="target", color=TARGET_COLOR)
+            line += [("  ", None), ("→ " + docs.pick(stage), TARGET_COLOR),
+                     (" {:.5g}".format(stage["target"]), None)]
         if stage is not None and stage.get("rejected"):
-            text += "  ({} outlier{} replaced)".format(stage["rejected"], "" if stage["rejected"] == 1 else "s")
+            line.append(("  ({} outlier{} replaced)".format(stage["rejected"],
+                                                           "" if stage["rejected"] == 1 else "s"), None))
         if scan.exit_status and scan.exit_status != "success":
-            text += "  ({})".format(docs.outcome(scan.exit_status, scan.reason))
-        self._say(text)
+            line.append(("  ({})".format(docs.outcome(scan.exit_status, scan.reason)), None))
+        self._say(line)
 
-    def _say(self, text):
-        self.stats.setText(text)
-        self.stats.setToolTip(text)
+    def _say(self, parts):
+        """The stats line from (text, colour or None) parts."""
+        self.stats.setText('<span style="white-space:pre">{}</span>'.format("".join(
+            html.escape(t) if c is None else '<span style="color:{}">{}</span>'.format(c, html.escape(t))
+            for t, c in parts)))
+        self.stats.setToolTip("".join(t for t, _ in parts))
 
 
 class _Loader(qt.QObject):
