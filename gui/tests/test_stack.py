@@ -87,6 +87,14 @@ class StackTabTest(unittest.TestCase):
         self.integrator.release()
         self.assertEqual(self.shown(), ("/d/a.h5", 2))
 
+    def test_a_long_stack_name_does_not_widen_the_tab(self):
+        self.tab.show()
+        self.app.processEvents()
+        width = self.tab.sizeHint().width()
+        self.integrator.row("/data/261031_lamino_electrode/sample_lamino_electrode_operando_cycle3_q.h5")
+        self.app.processEvents()
+        self.assertEqual(self.tab.sizeHint().width(), width)
+
 
 if __name__ == "__main__":
     unittest.main()

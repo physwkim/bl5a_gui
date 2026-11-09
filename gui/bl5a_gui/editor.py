@@ -30,7 +30,10 @@ class SequenceCombo(qt.QComboBox):
 
     def __init__(self, current=sequences.DEFAULT, parent=None):
         super().__init__(parent)
-        self.setSizeAdjustPolicy(qt.QComboBox.AdjustToContents)
+        # A name may be NAME_MAX characters: sized to it, the combo widened
+        # its form.
+        self.setSizeAdjustPolicy(qt.QComboBox.AdjustToMinimumContentsLengthWithIcon)
+        self.setMinimumContentsLength(20)
         self.refresh(current)
 
     def refresh(self, current=None):

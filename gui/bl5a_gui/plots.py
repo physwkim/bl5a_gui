@@ -291,7 +291,10 @@ class StackTab(qt.QWidget):
         self.data = {}  # path -> {"q": array, "unit": str, "frames": [...], "rows": [array]}
         self.latest = None  # the stack of the last row published
         self.series = qt.QComboBox()
-        self.series.setSizeAdjustPolicy(qt.QComboBox.AdjustToContents)
+        # Sized to its longest stack name, the combo widened the tab; its
+        # popup still shows whole names.
+        self.series.setSizeAdjustPolicy(qt.QComboBox.AdjustToMinimumContentsLengthWithIcon)
+        self.series.setMinimumContentsLength(20)
         self.refresh = qt.QPushButton("Refresh")
         self.follow = qt.QCheckBox("Follow")
         self.follow.setToolTip("Each new row brings up its stack")

@@ -4,7 +4,7 @@ import unittest
 
 from silx.gui import qt
 
-from bl5a_gui import forms, items
+from bl5a_gui import forms, items, sequences
 
 app = qt.QApplication.instance() or qt.QApplication([])
 
@@ -34,6 +34,18 @@ class ScanFormTest(unittest.TestCase):
         self.assertEqual(got, [f.item()])
         f.time.setText("0")
         self.assertRaises(items.Invalid, f.item)
+
+
+class InsituFormTest(unittest.TestCase):
+    def test_a_long_sequence_name_does_not_widen_the_form(self):
+        f = forms.InsituForm()
+        self.addCleanup(f.deleteLater)
+        f.show()
+        app.processEvents()
+        width = f.sizeHint().width()
+        f.sequence.addItem("x" * sequences.NAME_MAX)
+        app.processEvents()
+        self.assertEqual(f.sizeHint().width(), width)
 
 
 if __name__ == "__main__":
