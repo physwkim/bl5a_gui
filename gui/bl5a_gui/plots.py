@@ -153,7 +153,7 @@ class ScanTab(qt.QWidget):
         self.stats.setToolTip("".join(t for t, _ in parts))
 
 
-class _Loader(qt.QObject):
+class Loader(qt.QObject):
     """Decodes one mar345 file at a time off the GUI thread; a file asked
     for while one is decoding replaces any still waiting."""
 
@@ -215,7 +215,7 @@ class ImageTab(qt.QWidget):
         self.poni = None
         self.image = None  # (path, shape, pixel)
         self._rings = {}  # (shape, pixel, q) -> polylines
-        self.loader = _Loader(self)
+        self.loader = Loader(self)
         self.loader.loaded.connect(self._loaded)
         self.loader.failed.connect(lambda p, e: self.info.setText("{}: {}".format(p, e)))
         self.ringsBox.toggled.connect(self._drawRings)

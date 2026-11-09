@@ -1,8 +1,9 @@
 """The BL5A main window: run buttons and status line on top; the
-Alignment, Image and Stack tabs in the centre; panes the operator can
-move, float, close and resize: around the tabs motors and the forms on
-the left, the queue on the right, SPEC, commands and messages below; in
-the Alignment tab the stages and alignment history below its scan plot."""
+Alignment, Image, Stack and Calibration tabs in the centre; panes the
+operator can move, float, close and resize: around the tabs motors and
+the forms on the left, the queue on the right, SPEC, commands and
+messages below; in the Alignment tab the stages and alignment history
+below its scan plot."""
 
 import argparse
 import html
@@ -12,6 +13,7 @@ import sys
 from silx.gui import qt
 
 from . import bridge, config, docs, gate, items
+from .calib import CalibrationTab
 from .consoles import CommandsView, MessagesView, SpecConsole
 from .forms import BatteryForm, InsituForm, ScanForm
 from .panels import AlignBox, DataBox, IntegrationBox, MotorsPanel, StatusBar
@@ -100,12 +102,14 @@ class MainWindow(qt.QMainWindow):
         self.scanTab = ScanTab()
         self.imageTab = ImageTab()
         self.stackTab = StackTab(self.integrator)
+        self.calibTab = CalibrationTab(self.integrator)
         self.alignment = _Page(self.createPopupMenu)  # the scan plot and the panes of an alignment
         self.alignment.setCentralWidget(self.scanTab)
         self.tabs = qt.QTabWidget()
         self.tabs.addTab(self.alignment, "Alignment")
         self.tabs.addTab(self.imageTab, "Image")
         self.tabs.addTab(self.stackTab, "Stack")
+        self.tabs.addTab(self.calibTab, "Calibration")
 
         self.setCentralWidget(_scrolled(self.tabs))
 
@@ -192,6 +196,7 @@ class MainWindow(qt.QMainWindow):
         self.integrator.reply.connect(self._integratorReply)
         self.integrator.failed.connect(lambda m, e: self.messages.add("integrator {}: {}".format(m, e)))
         self.integrator.published.connect(self._integratorPub)
+        self.calibTab.applyRequested.connect(self.integration.applyFile)
         self.pvs.changed.connect(self._pv)
         self.pvs.connected.connect(self._pvConnected)
 
@@ -414,6 +419,7 @@ class MainWindow(qt.QMainWindow):
         # The frame's FullFileName_RBV, which bl5a-qs read after readout.
         self.status.set("file", html.escape(str(exposure.get("file") or "—")))
         self.imageTab.exposure(exposure.get("file"))
+        self.calibTab.exposure(exposure.get("file"))
         self.messages.add("{}: frame {} ({})".format(run.plan, exposure.get("file"), run.series))
 
     def _runStart(self, run):

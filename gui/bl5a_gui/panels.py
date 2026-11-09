@@ -361,7 +361,7 @@ class IntegrationBox(qt.QGroupBox):
         self.pending = None  # a set it accepted that has not taken effect
         self.refused = None
         browse.clicked.connect(self._browse)
-        self.apply.clicked.connect(self._apply)
+        self.apply.clicked.connect(lambda: self.applyFile(self.poni.text()))
         integrator.reply.connect(self._reply)
         integrator.published.connect(self._published)
         integrator.failed.connect(self._failed)
@@ -371,8 +371,11 @@ class IntegrationBox(qt.QGroupBox):
         if path:
             self.poni.setText(path)
 
-    def _apply(self):
-        path = self.poni.text().strip()
+    def applyFile(self, path):
+        """Send the PONI file at `path` with the box's npt: the GUI's one
+        way to a `set`, Apply's and the Calibration tab's."""
+        path = path.strip()
+        self.poni.setText(path)
         try:
             with open(path) as f:
                 text = f.read()
