@@ -26,7 +26,7 @@ use bsrs::qs::{ParamKind, ParamSpec, Registry};
 use serde_json::{Value, json};
 
 use crate::ctx::{Ctx, Step, plan_fn};
-use crate::devices::{CHANNELS, Devices, Holder, Preset, get};
+use crate::devices::{CHANNELS, Devices, Holder, get};
 use crate::place::{DATA_DIR, Place};
 use crate::scan::Scan;
 use crate::screen::{Pick, Screened};
@@ -135,23 +135,6 @@ where
         .await
     });
     finalize_wrapper(run_wrapper(plan_fn(body), md), finalizer)
-}
-
-/// `mar345expose`'s counts for `texpo`: seconds in counts of at most 429
-/// s, the timer preset's range; monitor counts (negative) in one.
-fn presets(texpo: f64) -> Vec<Preset> {
-    if texpo < 0.0 {
-        return vec![Preset::Monitor(-texpo)];
-    }
-    let n = (texpo / 429.0).trunc();
-    let rest = texpo - n * 429.0;
-    let mut out = vec![Preset::Seconds(429.0); n as usize];
-    // Not the macro's `uct(0)` after a whole number of 429 s counts:
-    // scaler1 refuses a 0 s preset.
-    if rest > 0.0 {
-        out.push(Preset::Seconds(rest));
-    }
-    out
 }
 
 /// The macros' verbs for a plan body.
@@ -302,34 +285,20 @@ impl<'a> Ops<'a> {
         self.event(&self.stages.clone(), values).await
     }
 
-    /// `mar345expose(name, texpo)` in its steps: SPEC works the shutter,
-    /// on its serial line, and keeps its records of the frame
-    /// (`exp_condition`'s data-file comments, `mar345readout`'s
-    /// `file_no`); the plan names the file in the item's folder, counts
-    /// and has mar345-ioc scan. An "exposures" event with the file and
-    /// the counts of the last count.
+    /// SPEC's `mar345expose(name, texpo)`: it names the file on the IOC,
+    /// works the shutter, counts (`uct`, in pieces of 429 s), logs
+    /// `exp_condition`, has the plate read out and keeps `file_no`
+    /// (`mar345readout`). The plan first points the IOC's FilePath at the
+    /// item's folder, which the macro leaves alone. An "exposures" event
+    /// with the file and the counts of the last count.
     async fn expose(&self, name: &str, texpo: f64) -> Step {
         let (cam, scaler) = (self.dev.cam.clone(), self.dev.scaler.clone());
         let (dir, file) = (self.place.dir.clone(), name.to_string());
         self.ctx
             .call(async move { cam.name_file(&dir, &file).await })
             .await?;
-        self.spec("mar345openshutter").await?;
-        for preset in presets(texpo) {
-            let scaler = scaler.clone();
-            self.ctx
-                .call(async move { scaler.count(preset).await })
-                .await?;
-        }
-        self.spec("mar345closeshutter").await?;
-        // `filename` and `exposure` are the macro's arguments, local to it.
-        self.spec(&format!(
-            "{{local filename, exposure; filename=\"{name}\"; exposure={texpo}; exp_condition}}"
-        ))
-        .await?;
-        let cam = self.dev.cam.clone();
-        self.ctx.call(async move { cam.acquire().await }).await?;
-        self.spec(&format!("mar345readout(\"{name}\")")).await?;
+        self.spec(&format!("mar345expose(\"{name}\", {texpo})"))
+            .await?;
         let cam = self.dev.cam.clone();
         let (counts, next, file) = self
             .ctx
@@ -380,15 +349,5 @@ mod tests {
         for bad in [0.0, f64::NAN, f64::INFINITY] {
             assert!(exposure("p", bad).is_err(), "{bad}");
         }
-    }
-
-    #[test]
-    fn exposures_count_in_429_s_pieces() {
-        use Preset::{Monitor, Seconds};
-        assert_eq!(presets(3.0), [Seconds(3.0)]);
-        assert_eq!(presets(429.0), [Seconds(429.0)]);
-        assert_eq!(presets(500.0), [Seconds(429.0), Seconds(71.0)]);
-        assert_eq!(presets(858.0), [Seconds(429.0), Seconds(429.0)]);
-        assert_eq!(presets(-7e4), [Monitor(7e4)]);
     }
 }

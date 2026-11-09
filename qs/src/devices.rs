@@ -49,8 +49,6 @@ fn steps_apart(a: f64, b: f64, mres: f64) -> f64 {
 }
 /// SPEC back at its prompt after a ^C.
 const READY_TIMEOUT: Duration = Duration::from_secs(30);
-/// mar345-ioc's task takes an Acquire on its next wake-up.
-const TAKE_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// SpecCreate's motors, in its order.
 pub const AXES: [&str; 11] = [
@@ -684,13 +682,6 @@ pub struct MarCam {
     file_path: Arc<EpicsCaBackend<String>>,
     file_path_exists: Arc<EpicsCaBackend<bool>>,
     file_name: Arc<EpicsCaBackend<String>>,
-    /// A bo whose put completes on the write (mar345-ioc) or with the
-    /// frame, a minute or two later (ADmar345): not bounded by PUT_TIMEOUT.
-    acquire: Arc<EpicsCaBackend<bool>>,
-    /// 1 from the task taking the frame to its end, scanned or not.
-    acquire_rbv: Arc<EpicsCaBackend<bool>>,
-    /// Counts the frames that scanned.
-    array_counter: Arc<EpicsCaBackend<i64>>,
     pub file_number: Arc<EpicsCaBackend<i64>>,
     pub full_file_name: Arc<EpicsCaBackend<String>>,
 }
@@ -709,9 +700,6 @@ impl MarCam {
             file_path: backend(&format!("{CAM}FilePath")).await?,
             file_path_exists: backend(&format!("{CAM}FilePathExists_RBV")).await?,
             file_name: backend(&format!("{CAM}FileName")).await?,
-            acquire: backend(&format!("{CAM}Acquire")).await?,
-            acquire_rbv: backend(&format!("{CAM}Acquire_RBV")).await?,
-            array_counter: backend(&format!("{CAM}ArrayCounter_RBV")).await?,
             file_number: backend(&format!("{CAM}FileNumber")).await?,
             full_file_name: backend(&format!("{CAM}FullFileName_RBV")).await?,
         }))
@@ -747,36 +735,6 @@ impl MarCam {
             )));
         }
         put(&self.file_name, name.to_string()).await
-    }
-
-    /// `_mar345scanning`: Acquire, with AcquireTime 0 a readout alone,
-    /// until the frame is over. A frame that did not scan is an error.
-    pub async fn acquire(&self) -> BResult<()> {
-        let frames = get(&self.array_counter).await?;
-        self.acquire.put(Some(true)).await?;
-        // Acquire_RBV can still read the 0 from before the put; a frame
-        // that came and went between two reads still counted.
-        let take_by = tokio::time::Instant::now() + TAKE_TIMEOUT;
-        let mut taken = false;
-        loop {
-            if get(&self.acquire_rbv).await? {
-                taken = true;
-            } else if taken || get(&self.array_counter).await? > frames {
-                break;
-            } else if tokio::time::Instant::now() >= take_by {
-                return Err(BsrsError::State(
-                    "mar345 Acquire: the detector did not take it".into(),
-                ));
-            }
-            tokio::time::sleep(POLL).await;
-        }
-        if get(&self.array_counter).await? > frames {
-            Ok(())
-        } else {
-            Err(BsrsError::State(
-                "mar345 Acquire: no frame scanned (see mar345-ioc)".into(),
-            ))
-        }
     }
 }
 

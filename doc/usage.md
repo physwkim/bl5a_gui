@@ -307,10 +307,10 @@ What a `mar_series` does, in order:
 
 1. `mar345closeshutter`, `scell` to 0, `counters 2 3`, `fi 0 1 0 0`,
    `ic_range 4`, a 2 s wait, `mar_ip7 <geometry>` (Repeat only), `scell` to 0.
-2. For each frame: the file name goes to the mar345 IOC,
-   `mar345openshutter`, the count (in pieces of at most 429 s, or one
-   monitor count), `mar345closeshutter`, `exp_condition`, the plate
-   readout through the IOC, `mar345readout`.
+2. For each frame: the item's data folder goes to the mar345 IOC's
+   FilePath, then SPEC's `mar345expose("<name>", <texpo>)` names the
+   file, works the shutter, counts, logs `exp_condition`, has the plate
+   read out and runs `mar345readout`.
 3. Frame *i* starts *i*·Ti after the first frame. Between frames the plan
    only waits.
 

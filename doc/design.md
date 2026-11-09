@@ -415,16 +415,13 @@ coin_align, Thin film = align_in.mac)이 읽기 전용으로 있고, 이용자 �
   없음(myinsitu 끝의 `set_ramp 25; settemp 025; plotselect att;
   loopscan 3600`). 온도는 temp-ioc(7단계)가 생기면 `BL5A:TC:*`로 옮기고,
   단위는 매크로처럼 °C다. 중단하면 컨트롤러 설정점은 마지막 값에 남는다.
-- 노출 조각: `mar345expose`를 단계로 나눠 plan이 순서를 쥔다. 셔터만 SPEC
-  시리얼(PFCU1)에 있으므로 SPEC 명령으로 둔다: `cam1:FileName` put →
-  `mar345openshutter` → scaler1 카운트(429 s 조각, 음수는 PR2 모니터
-  프리셋 한 번; 0 s 나머지는 scaler가 거절하므로 건너뜀) →
-  `mar345closeshutter` → `{local filename, exposure; filename="…";
-  exposure=…; exp_condition}`(SPEC 데이터 파일의 `#MAR345`·`#Beam_cond1`
-  줄) → `cam1:Acquire`, Acquire_RBV가 1에서 0이 되고 ArrayCounter_RBV가
-  오를 때까지 대기(Acquire는 bo라 put 완료가 프레임 끝이 아니다) →
-  `mar345readout("…")`(SPEC의 `file_no`). 끝나면 scaler의 마지막 카운트,
-  FileNumber, FullFileName_RBV를 이벤트에 싣는다. 어떻게 끝나든 plan의
+- 노출: plan이 `cam1:FilePath`를 아이템 폴더로 둔 뒤 SPEC 명령
+  `mar345expose("…", texpo)` 하나를 보낸다. 매크로가 `cam1:FileName` put,
+  셔터(PFCU1 시리얼), `uct`(429 s 조각), `exp_condition`, `cam1:Acquire`와
+  Scanning 대기, `mar345readout`(`file_no`)을 모두 한다. 단계를 나눠
+  plan이 쥐던 방식은 실제 ADmar345의 Acquire put이 readout 끝까지
+  완료되지 않는 점 등 IOC 차이를 plan이 떠안아 접었다. 끝나면 scaler의
+  마지막 카운트, FileNumber, FullFileName_RBV를 이벤트에 싣는다. 어떻게 끝나든 plan의
   finalizer가 실행 중 SPEC 명령을 ^C로, 카운트를 CNT=0으로 멈추고 SPEC이
   준비되면 `mar345closeshutter`를 보낸다. 이벤트에는 파일 경로와 함께 mon,
   sec, 온도 RBV/SP, th, shold, 필터 상태를 담는다. erase는 SPEC을 거치지 않고
