@@ -109,7 +109,7 @@ Tested with Python 3.12.14 and:
 | --- | --- |
 | silx | 3.1.2 |
 | PySide6 | 6.11.2 |
-| repics | 0.4.3 |
+| repics | 0.4.4 |
 | pyzmq | 27.2.0 |
 | msgpack | 1.2.2 |
 | numpy | 2.5.3 |

@@ -213,19 +213,19 @@ def test_spec_command_ends_once_its_put_does():
     for s in ("Cmd:Status", "Cmd:Reply"):
         bl.pvs[config.SPEC + s] = FakePV(fails=CaDisconnected("disconnected", 24))
     got = bl.spec_command("wa", 5.0)
-    assert [p.tobytes() for p in cmd.puts] == [b"wa\0"]
+    assert cmd.puts == ["wa"]
     assert got["cmd"] == "wa" and got["status"] == "no status" and bl.spec_job is None
 
 
-def test_spec_command_sends_a_line_past_39_characters_as_a_char_array():
-    # A str goes out as a DBR_STRING, which holds 39 characters.
+def test_spec_command_puts_a_line_past_39_characters_whole():
+    # To Cmd.VAL$, which repics's PV.put sends a str to as chars.
     bl = beamline({"re_state": "idle"})
     bl.pvs[config.SPEC_CMD] = cmd = FakePV()
     for s in ("Cmd:Status", "Cmd:Reply"):
         bl.pvs[config.SPEC + s] = FakePV("")
     line = "wm martran marsdd marz marshut marx ipbsx ipbsy"
     bl.spec_command(line, 5.0)
-    assert cmd.puts[0].dtype == np.uint8 and cmd.puts[0].tobytes() == line.encode() + b"\0"
+    assert cmd.puts == [line]
 
 
 def test_spec_command_whose_put_the_server_fails_is_an_error_and_logged(caplog):

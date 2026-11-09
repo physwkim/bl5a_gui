@@ -2,8 +2,6 @@
 
 import os
 
-import numpy as np
-
 QS_CONTROL = "tcp://localhost:60715"
 QS_DOCUMENTS = "tcp://localhost:60725"
 INTEGRATOR_REP = "tcp://localhost:60735"
@@ -26,16 +24,10 @@ def arguments(parser):
 
 SPEC = "BL5A:SPEC:"
 # The SPEC command line as a long string: Cmd itself is a DBF_STRING and
-# holds 39 characters, as bl5a-qs's Cmd.VAL$ does not.
+# holds 39 characters, as bl5a-qs's Cmd.VAL$ does not. repics's PV.put,
+# not ca.caput, sends a str to it as chars (0.4.4).
 SPEC_CMD = SPEC + "Cmd.VAL$"
 MAR = "BL5A:MAR345:cam1:"
-
-
-def spec_line(cmd):
-    """`cmd` as SPEC_CMD takes it, a NUL-ended char array: repics 0.4.3
-    sends a str as a DBR_STRING, which holds 39 characters, even to a char
-    array."""
-    return np.frombuffer(cmd.encode() + b"\0", np.uint8)
 
 # The ring current; the sim stack serves no such PV, so it reads "—" there.
 RING_PV = "BL5A:userCalcOut1.VAL"

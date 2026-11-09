@@ -506,12 +506,11 @@ class Beamline:
         cmd = cmd.strip()
         if not cmd:
             raise ToolError("an empty command")
-        line = config.spec_line(cmd)
         with self.spec_lock:
             c = Command(cmd, time.time(), self.spec_log.last)
             self._claim(c)
             try:
-                threading.Thread(target=self._send, args=(c, line), name="bl5a-mcp-cmd", daemon=True).start()
+                threading.Thread(target=self._send, args=(c,), name="bl5a-mcp-cmd", daemon=True).start()
             except BaseException:
                 self.spec_job = None
                 raise
@@ -521,14 +520,14 @@ class Beamline:
             raise ToolError(got["error"])
         return got
 
-    def _send(self, c, line):
-        """Put `line`, command `c`, to Cmd and end `c` when the put does.
+    def _send(self, c):
+        """Put command `c` to Cmd and end `c` when the put does.
         Only a put that waits raises a failure the server sends after
         taking it, so this put waits; with no timeout, as a command may run
         for hours."""
         name = config.SPEC_CMD
         try:
-            self.pvs[name].put(line, wait=True, timeout=None)
+            self.pvs[name].put(c.cmd, wait=True, timeout=None)
         except Exception as e:  # unclassified, `c` would show the previous command's status
             c.error = "{}: {}".format(name, e.args[0] if isinstance(e, CaError) else repr(e))
             logger.warning("%r: %s", c.cmd, c.error)
