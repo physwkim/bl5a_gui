@@ -2612,7 +2612,7 @@ checksum = "6c20b6793b5c2fa6553b250154b78d6d0db37e72700ae35fad9387a46f487c97"
 [[package]]
 name = "rsfai"
 version = "0.0.0"
-source = "git+https://github.com/physwkim/rsFAI?rev=ea24282d218f4fe191ed296fae7817f7f7d6c362#ea24282d218f4fe191ed296fae7817f7f7d6c362"
+source = "git+https://github.com/physwkim/rsFAI?rev=bd9c52cfbe83feb6e9aad81921465cb64898d22b#bd9c52cfbe83feb6e9aad81921465cb64898d22b"
 dependencies = [
  "rsfai-calibrant",
  "rsfai-core",
@@ -2626,7 +2626,7 @@ dependencies = [
 [[package]]
 name = "rsfai-calib"
 version = "0.0.0"
-source = "git+https://github.com/physwkim/rsFAI?rev=ea24282d218f4fe191ed296fae7817f7f7d6c362#ea24282d218f4fe191ed296fae7817f7f7d6c362"
+source = "git+https://github.com/physwkim/rsFAI?rev=bd9c52cfbe83feb6e9aad81921465cb64898d22b#bd9c52cfbe83feb6e9aad81921465cb64898d22b"
 dependencies = [
  "argmin",
  "argmin-math",
@@ -2640,12 +2640,12 @@ dependencies = [
 [[package]]
 name = "rsfai-calibrant"
 version = "0.0.0"
-source = "git+https://github.com/physwkim/rsFAI?rev=ea24282d218f4fe191ed296fae7817f7f7d6c362#ea24282d218f4fe191ed296fae7817f7f7d6c362"
+source = "git+https://github.com/physwkim/rsFAI?rev=bd9c52cfbe83feb6e9aad81921465cb64898d22b#bd9c52cfbe83feb6e9aad81921465cb64898d22b"
 
 [[package]]
 name = "rsfai-core"
 version = "0.0.0"
-source = "git+https://github.com/physwkim/rsFAI?rev=ea24282d218f4fe191ed296fae7817f7f7d6c362#ea24282d218f4fe191ed296fae7817f7f7d6c362"
+source = "git+https://github.com/physwkim/rsFAI?rev=bd9c52cfbe83feb6e9aad81921465cb64898d22b#bd9c52cfbe83feb6e9aad81921465cb64898d22b"
 dependencies = [
  "ndarray",
  "ndarray-npy",
@@ -2658,7 +2658,7 @@ dependencies = [
 [[package]]
 name = "rsfai-detectors"
 version = "0.0.0"
-source = "git+https://github.com/physwkim/rsFAI?rev=ea24282d218f4fe191ed296fae7817f7f7d6c362#ea24282d218f4fe191ed296fae7817f7f7d6c362"
+source = "git+https://github.com/physwkim/rsFAI?rev=bd9c52cfbe83feb6e9aad81921465cb64898d22b#bd9c52cfbe83feb6e9aad81921465cb64898d22b"
 dependencies = [
  "ndarray",
  "rsfai-core",
@@ -2668,9 +2668,10 @@ dependencies = [
 [[package]]
 name = "rsfai-geometry"
 version = "0.0.0"
-source = "git+https://github.com/physwkim/rsFAI?rev=ea24282d218f4fe191ed296fae7817f7f7d6c362#ea24282d218f4fe191ed296fae7817f7f7d6c362"
+source = "git+https://github.com/physwkim/rsFAI?rev=bd9c52cfbe83feb6e9aad81921465cb64898d22b#bd9c52cfbe83feb6e9aad81921465cb64898d22b"
 dependencies = [
  "rayon",
+ "rsfai-core",
  "rsfai-detectors",
  "serde_json",
  "thiserror 2.0.21",
@@ -2679,7 +2680,7 @@ dependencies = [
 [[package]]
 name = "rsfai-integrate"
 version = "0.0.0"
-source = "git+https://github.com/physwkim/rsFAI?rev=ea24282d218f4fe191ed296fae7817f7f7d6c362#ea24282d218f4fe191ed296fae7817f7f7d6c362"
+source = "git+https://github.com/physwkim/rsFAI?rev=bd9c52cfbe83feb6e9aad81921465cb64898d22b#bd9c52cfbe83feb6e9aad81921465cb64898d22b"
 dependencies = [
  "ndarray",
  "rayon",
@@ -2692,7 +2693,7 @@ dependencies = [
 [[package]]
 name = "rsfai-peaks"
 version = "0.0.0"
-source = "git+https://github.com/physwkim/rsFAI?rev=ea24282d218f4fe191ed296fae7817f7f7d6c362#ea24282d218f4fe191ed296fae7817f7f7d6c362"
+source = "git+https://github.com/physwkim/rsFAI?rev=bd9c52cfbe83feb6e9aad81921465cb64898d22b#bd9c52cfbe83feb6e9aad81921465cb64898d22b"
 dependencies = [
  "nalgebra",
 ]
@@ -2700,7 +2701,7 @@ dependencies = [
 [[package]]
 name = "rsfai-preproc"
 version = "0.0.0"
-source = "git+https://github.com/physwkim/rsFAI?rev=ea24282d218f4fe191ed296fae7817f7f7d6c362#ea24282d218f4fe191ed296fae7817f7f7d6c362"
+source = "git+https://github.com/physwkim/rsFAI?rev=bd9c52cfbe83feb6e9aad81921465cb64898d22b#bd9c52cfbe83feb6e9aad81921465cb64898d22b"
 dependencies = [
  "ndarray",
  "rayon",
