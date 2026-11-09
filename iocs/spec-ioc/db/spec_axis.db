@@ -14,6 +14,10 @@ include "asyn_motor.db"
 record(motor, "$(P)$(M)") {
     # SET writes SPEC's position (`set`) instead of the record's offset.
     field(FOFF, "Frozen")
+    # SPEC takes out backlash itself, overshooting and coming back; the
+    # record's new-target monitor would read the return as a move away
+    # from the target and send STOP, SPEC's ^C.
+    field(NTM, "NO")
 }
 
 # A request SPEC refused (MSTA RA_PROBLEM) leaves VAL at its target, and
