@@ -11,7 +11,7 @@ from silx.gui import qt
 
 from . import bridge, config, docs, gate, items
 from .consoles import CommandsView, MessagesView, SpecConsole
-from .forms import BatteryForm, InsituForm
+from .forms import BatteryForm, InsituForm, ScanForm
 from .panels import AlignBox, DataBox, IntegrationBox, MotorsPanel, StatusBar
 from .plots import ImageTab, ScanTab, StackTab
 from .tables import HistoryTable, QueueTable, StagesTable
@@ -53,9 +53,11 @@ class MainWindow(qt.QMainWindow):
         self.align = AlignBox()
         self.battery = BatteryForm()
         self.insitu = InsituForm()
+        self.scanForm = ScanForm()
         forms = qt.QTabWidget()
         forms.addTab(self.battery, "Battery")
         forms.addTab(self.insitu, "In-situ")
+        forms.addTab(self.scanForm, "Scan")
         left = qt.QWidget()
         leftLayout = qt.QVBoxLayout(left)
         leftLayout.setContentsMargins(0, 0, 0, 0)
@@ -172,6 +174,7 @@ class MainWindow(qt.QMainWindow):
         self.battery.queueRequested.connect(lambda item: self.add([item]))
         self.battery.stopAfterFrameRequested.connect(self._stopAfterFrame)
         self.insitu.queueRequested.connect(self.add)
+        self.scanForm.queueRequested.connect(lambda item: self.add([item]))
 
         for suffix in gate.SPEC_STATE:
             self.pvs.watch(config.SPEC + suffix)

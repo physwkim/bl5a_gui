@@ -85,13 +85,14 @@ def test_tools_and_their_arguments():
     assert set(tools) == {
         "status", "queue", "history", "motors", "scans", "scan", "alignment", "messages", "spec_log", "commands",
         "integration", "stacks", "stack", "frame_image", "spec_result", "alignment_sequences", "alignment_sequence",
-        "save_alignment_sequence", "queue_alignment", "queue_mar_series",
+        "save_alignment_sequence", "queue_alignment", "queue_scan", "queue_mar_series",
         "queue_insitu", "queue_remove", "queue_move", "queue_clear", "queue_start", "queue_stop",
         "queue_autostart", "environment_open", "environment_close", "pause", "resume", "stop", "abort",
         "stop_after_frame", "tweak", "spec_command", "spec_abort", "stop_all", "integration_set"}
     mar = tools["queue_mar_series"].input_schema
     assert set(mar["required"]) == {"name", "texpo", "beamstop_in_place"}
     assert tools["queue_alignment"].input_schema["required"] == ["sequence"]
+    assert set(tools["queue_scan"].input_schema["required"]) == {"motor", "start", "finish", "intervals", "time"}
     assert set(tools["save_alignment_sequence"].input_schema["required"]) == {"name", "blocks"}
     assert tools["alignment_sequences"].annotations.read_only_hint
     assert tools["messages"].description.startswith("What the GUI's Messages tab shows")

@@ -40,7 +40,7 @@ the integrator, so it shows every stack it holds.
 | Area | What is in it |
 | --- | --- |
 | Top | the run buttons (Pause, Resume, Stop, Abort, Stop all) and the status line |
-| Left | motors, the Data and Integration boxes, the Alignment box, the Battery and In-situ forms |
+| Left | motors, the Data and Integration boxes, the Alignment box, the Battery, In-situ and Scan forms |
 | Centre | the Scan, Image and Stack tabs |
 | Right | the queue, the stages of the running alignment, the alignment history |
 | Bottom | the SPEC console, the Commands the plans sent, the GUI's Messages |
@@ -224,7 +224,7 @@ rest wait in order.
 | Column | Shows |
 | --- | --- |
 | # | the place in the queue |
-| Plan | `mar_series`, `align` or `insitu_step` |
+| Plan | `mar_series`, `align`, `insitu_step` or `step_scan` |
 | Name | the frame file name, when the plan takes frames |
 | Parameters | the item's arguments, for example `sequence='Thin film' T=30 ramp=10 wait=True tolerance=0.5 soak=5/1 texpo=-70000 th_list=-0.05/0.11/0.13/0.15` |
 | Folder | where the item's data goes: `<data root>/<series>`, or the series alone when the item goes to bl5a-qs's `--data-root` |
@@ -557,6 +557,14 @@ the SPEC-format file of its item's data folder, `<series>.spec` (see
 [Data](#data) and [install.md](install.md) section 4.5), for splot or
 PyMCA. The toolbar is silx's: zoom, pan, log axes, grid, save, print.
 
+The **Scan** form, on the left beside Battery and In-situ, queues one
+step scan as a `step_scan` item: a `lup` (start and finish are offsets
+from where the motor is, and it goes back there after) or an `ascan`
+(positions; the motor stays at finish), intervals + 1 points each
+counted Time seconds, with the statistics of the chosen Counter. It
+moves the motor to no target. It is drawn here and goes to its series'
+`.spec` file like an alignment's scans. The form has no cscan or clup.
+
 ## In-situ (film against temperature)
 
 The In-situ form is SPEC's `myinsitu` as a table. Each row is one
@@ -754,7 +762,7 @@ scan find?".
 | `frame_image` | the last frame, or a named one, as a picture | Image tab |
 | `integration`, `stacks`, `stack` | the integrator's PONI and npt; the stacks; one stack's rows | Integration, Stack tab |
 | `alignment_sequences`, `alignment_sequence`, `save_alignment_sequence` | a user's sequences; one sequence's blocks; save one as the user's | Alignment box: Load…; Blocks window: Save as… |
-| `queue_alignment`, `queue_mar_series`, `queue_insitu` | queue items | Alignment Queue, Battery form, In-situ form |
+| `queue_alignment`, `queue_scan`, `queue_mar_series`, `queue_insitu` | queue items | Alignment Queue, Scan form, Battery form, In-situ form |
 | `queue_remove`, `queue_move`, `queue_clear`, `queue_start`, `queue_stop`, `queue_autostart`, `environment_open`, `environment_close` | edit and run the queue | the queue's buttons |
 | `pause`, `resume`, `stop`, `abort`, `stop_after_frame` | end or hold the running plan | Run buttons, Stop after frame |
 | `tweak` | move a motor by a step | Motors ◀ ▶ |

@@ -1,6 +1,7 @@
-//! The three queue items: `align` (an alignment sequence: coin_align's,
-//! align_in.mac's or a user's), `mar_series` (mymar1, mymar) and
-//! `insitu_step` (a step of myinsitu, then mymar_in). Each is one run;
+//! The queue items: `align` (an alignment sequence: coin_align's,
+//! align_in.mac's or a user's), `mar_series` (mymar1, mymar),
+//! `insitu_step` (a step of myinsitu, then mymar_in) and `step_scan`
+//! (one ascan or lup of the GUI's scan form). Each is one run;
 //! its scans are runs of their own ([`crate::scan`]). Besides the scans
 //! a plan records the SPEC commands it sent ("commands"), each alignment
 //! scan's outcome ("stages"), where an alignment left the sample
@@ -10,6 +11,7 @@ mod align;
 mod args;
 mod blocks;
 mod mar;
+mod step_scan;
 
 use std::collections::HashMap;
 use std::path::Path;
@@ -355,6 +357,7 @@ impl<'a> Ops<'a> {
 pub fn register_all(reg: &mut Registry, devices: &Devices, root: &Path) {
     align::register(reg, devices, root);
     mar::register(reg, devices, root);
+    step_scan::register(reg, devices, root);
 }
 
 #[cfg(test)]

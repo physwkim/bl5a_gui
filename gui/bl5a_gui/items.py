@@ -3,7 +3,7 @@ queues one. No Qt.
 
 bl5a-qs accepts any item into its queue and checks the arguments only when
 the item runs, so a bad item fails mid-queue; the forms check here first.
-Each check is qs's own rule (qs/src/plans/{mod,mar,blocks}.rs) or, where
+Each check is qs's own rule (qs/src/plans/{mod,mar,blocks,step_scan}.rs) or, where
 noted, the macro's stricter one (mymar's header: Ti > 2.5 min, Texpo 1–20
 s)."""
 
@@ -449,6 +449,25 @@ def align(value, sequence=None, series=None):
     return plan_item("align", **kwargs)
 
 
+def step_scan(motor, start, finish, intervals, time, relative=False, counter="det", series=None):
+    """One ascan (lup when relative) of `motor`, counting `time` s at each
+    of intervals + 1 points (qs plans/step_scan.rs)."""
+    if motor not in config.MOTORS:
+        raise Invalid("motor: one of {}, got {!r}".format(", ".join(config.MOTORS), motor))
+    if counter not in COUNTERS:
+        raise Invalid("counter: one of {}, got {!r}".format(", ".join(COUNTERS), counter))
+    time = number(time, "time")
+    if time <= 0:
+        raise Invalid("time: seconds per point, positive, got {:g}".format(time))
+    kwargs = {"motor": motor, "start": number(start, "start"), "finish": number(finish, "finish"),
+              "intervals": count(intervals, "intervals"), "time": time, "relative": bool(relative),
+              "counter": counter}
+    md = series_md(series)
+    if md:
+        kwargs["md"] = md
+    return plan_item("step_scan", **kwargs)
+
+
 def describe(item):
     """(plan, name, parameters, folder, user) for the queue's cells."""
     kw = item.get("kwargs") or {}
@@ -457,7 +476,8 @@ def describe(item):
     shown = []
     if "blocks" in kw and "sequence" not in kw:
         shown.append("blocks={}".format(len(kw["blocks"]) if isinstance(kw["blocks"], list) else "?"))
-    for k in ("sequence", "T", "ramp", "wait", "tolerance", "soak", "n", "ti", "texpo", "geometry", "th_list"):
+    for k in ("sequence", "T", "ramp", "wait", "tolerance", "soak", "n", "ti", "texpo", "geometry", "th_list",
+              "motor", "start", "finish", "intervals", "time", "relative", "counter"):
         if k in kw:
             v = kw[k]
             if k == "sequence":

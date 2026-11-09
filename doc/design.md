@@ -338,14 +338,15 @@ FullFileName_RBV), 온도(`BL5A:TC:*`), suspender용 링
   시각이 아니라 bl5a-qs에 도착한 시각이다), 나머지 키 이름순, 검출기 마지막이다. 라벨은
   니모닉이고 `#O`·`#P`·`#G`·`#Q`는 없다(문서에 모터 표와 기하가 없다).
 
-큐 아이템은 plan 셋뿐이다. 스캔과 노출은 그 안의 조각이고 따로 큐에 넣지
-않는다.
+큐 아이템은 plan 넷이다. 노출은 그 안의 조각이고 따로 큐에 넣지 않는다.
+스캔도 그렇지만, GUI의 Scan 폼이 넣는 스텝 스캔 하나는 `step_scan`이다.
 
 | plan | 대응 매크로 |
 | --- | --- |
 | `align(blocks, sequence)` | coin_align, align_in.mac(정렬 순서로) |
 | `mar_series(name, ti, texpo, n, geometry)` | mymar1(n=1), mymar |
 | `insitu_step(T, ramp, wait, soak, blocks, sequence, th_list, texpo, name)` | myinsitu의 온도 한 칸 + mymar_in |
+| `step_scan(motor, start, finish, intervals, time, relative, counter)` | ascan, lup(relative) |
 
 정렬은 블록 목록(`qs/src/plans/blocks.rs`)이다. 블록은 scan(type
 ascan·lup·cscan·clup, motor, start, finish, 스텝이면 time(점당 초)이나

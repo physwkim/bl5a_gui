@@ -195,7 +195,7 @@ const PICKS: [(&str, Option<Stat>); 4] = [
 ];
 const KINDS: [&str; 6] = ["scan", "move", "spec", "wait", "erase", "loop"];
 
-fn counters() -> Vec<&'static str> {
+pub(super) fn counters() -> Vec<&'static str> {
     CHANNELS.into_iter().filter(|c| *c != "sec").collect()
 }
 
