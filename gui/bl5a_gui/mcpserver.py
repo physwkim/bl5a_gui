@@ -702,7 +702,8 @@ sleep (s) for cscan/clup, counter: det|ic1|icxrd, pick: CEN|COM|xMAX|EDGE (where
 to this there)}; "move" {moves: [[motor, position], ...], moved together};
 "spec" {command: one SPEC line}; "wait" {seconds}; "erase" {} (the mar345 plate); "loop" {times, blocks:
 [...]} (its blocks in order, times over; they may be loops too). Any block may carry "when" {motor, op:
-"<"|">", value} (run only then; a loop's, once before it starts) and "note". Motors: """ + ", ".join(config.MOTORS) + "."
+"<"|">", value} (run only then; a loop's, once before it starts) and "note".
+Motors: """ + ", ".join(config.MOTORS) + "."
 
 
 def build(bl):
