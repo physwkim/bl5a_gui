@@ -64,7 +64,6 @@ ALIGNED = 200  # alignment history rows kept
 WENT = ("pick", "dip", "before", "target", "after", "set")
 TWEAK_TIMEOUT = 300.0  # s, for one TWF/TWR move to complete
 CONNECT_TIMEOUT = 2.0  # s, for a PV to connect before a put to it
-MSTA_PROBLEM = 0x200  # motor record MSTA: the driver refused the request
 FRAME_PX = 1024  # frame_image's longest side
 
 
@@ -614,7 +613,7 @@ class Beamline:
             with self.spec_lock:
                 self.spec_job = None
         # A refused move completes the put too, with the motor where it was.
-        if int(msta) & MSTA_PROBLEM:
+        if int(msta) & config.MSTA_PROBLEM:
             raise ToolError("SPEC refused the {} move; spec_log says why".format(motor))
         return {"motor": motor, "direction": direction, "step": step, "rbv": sig(rbv),
                 "unit": self.value(base + ".EGU")[1], "seconds": round(time.time() - t0, 2)}

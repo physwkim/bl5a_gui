@@ -79,8 +79,12 @@ class StatusBar(qt.QWidget):
 
 class MotorsPanel(qt.QGroupBox):
     """Each spec-ioc motor's readback and its tweak buttons. A tweak is
-    the motor record's TWF/TWR by TWV, which spec-ioc turns into a SPEC
-    move; the buttons are live only while nothing else drives SPEC."""
+    the motor record's TWF/TWR by TWV, a moveTo its VAL, which spec-ioc
+    turns into a SPEC move; the buttons are live only while nothing else
+    drives SPEC."""
+
+    moved = qt.Signal(str, object)  # a moveTo's motor; None, or why its put failed
+    failed = qt.Signal(str)  # why a moveTo did not move
 
     def __init__(self, pvs, parent=None):
         super().__init__(parent)  # its pane is titled Motors
@@ -132,12 +136,25 @@ class MotorsPanel(qt.QGroupBox):
         grid.setColumnStretch(6, 1)  # and wider: right of them
         pvs.changed.connect(self._changed)
         pvs.connected.connect(self._connected)
+        self.moved.connect(self._moved)
         self.setAllowed(False)
 
     def setAllowed(self, allowed):
         for row in self.rows.values():
             for w in row["buttons"]:
                 w.setEnabled(allowed)
+
+    def moveTo(self, motor, value):
+        # The put completes when the move does, or at once when refused;
+        # the signal brings its end to this thread.
+        self.pvs.put(config.SPEC + motor + ".VAL", value, callback=lambda error: self.moved.emit(motor, error))
+
+    def _moved(self, motor, error):
+        msta = self.pvs.get_text(config.SPEC + motor + ".MSTA") if error is None else ""
+        if msta and int(float(msta)) & config.MSTA_PROBLEM:
+            error = "SPEC refused it; the SPEC pane says why"
+        if error is not None:
+            self.failed.emit("{} move: {}".format(motor, error))
 
     def _setStep(self, m):
         row = self.rows[m]

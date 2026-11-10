@@ -47,6 +47,7 @@ TEMP_RAMP_PV = None
 
 # The spec-ioc motor records, in the panel's order.
 MOTORS = ("sy", "shold", "th", "tth", "nu", "sx", "phi", "scell", "martran", "marsdd", "marshut")
+MSTA_PROBLEM = 0x200  # motor record MSTA: the driver refused the request
 
 # The ring lines the image tab draws by default: Al 111 and 200, Å⁻¹.
 RINGS = (2.687, 3.103)

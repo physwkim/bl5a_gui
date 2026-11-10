@@ -24,9 +24,11 @@ Y_MARGINS = (0.0, 0.0, 0.05, 0.05)
 
 class ScanTab(qt.QWidget):
     """The scan running now, point by point, then its CEN/COM/MAX; the
-    session's earlier scans stay in the list to look back at."""
+    session's earlier scans stay in the list to look back at. The buttons
+    move the shown scan's motor to one of them."""
 
     MAX_KEPT = 100
+    moveRequested = qt.Signal(str, float)  # a spec-ioc motor, where to
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -43,13 +45,22 @@ class ScanTab(qt.QWidget):
         top = qt.QHBoxLayout()
         top.addWidget(qt.QLabel("Scan"))
         top.addWidget(self.scans)
-        top.addWidget(self.stats, 1)
+        top.addStretch(1)
+        self.moves = {}
+        for k, _, _ in MARKERS:
+            self.moves[k] = b = qt.QPushButton()
+            b.clicked.connect(lambda _=False, k=k: self.moveRequested.emit(self.at[0].motor, self._target(k)))
+            top.addWidget(b)
         layout = qt.QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addLayout(top)
+        # A row of its own: beside the buttons it is clipped at the viewer pane's width.
+        layout.addWidget(self.stats)
         layout.addWidget(self.plot)
         self.kept = []  # (scan, stage or None)
         self.live = None
+        self.allowed = False  # a motor may be moved
+        self.at = None  # the drawn scan, its peak.Stats (None while it runs or with none), of a dip
         self.scans.activated.connect(self._show)
         # Points are drawn at most five times a second.
         self._dirty = False
@@ -57,6 +68,40 @@ class ScanTab(qt.QWidget):
         self._timer.setInterval(200)
         self._timer.timeout.connect(self._redraw)
         self._timer.start()
+        self._buttons()
+
+    def setAllowed(self, allowed):
+        self.allowed = allowed
+        self._buttons()
+
+    def _shift(self, scan):
+        """How far the stages since `scan`, its own first, moved its motor's
+        positions with `set`; a set sent any other way is not seen."""
+        i = next((i for i, (s, _) in enumerate(self.kept) if s is scan), len(self.kept))
+        return sum(docs.zero_shift(st) for s, st in self.kept[i:] if st is not None and s.motor == scan.motor)
+
+    def _target(self, k):
+        """Where the drawn statistic `k` is in its motor's positions now,
+        if a number and of a spec-ioc motor."""
+        if self.at is None or self.at[1] is None or self.at[0].motor not in config.MOTORS:
+            return None
+        v = getattr(self.at[1], k) - self._shift(self.at[0])
+        return v if math.isfinite(v) else None
+
+    def _buttons(self):
+        motor = self.at[0].motor if self.at else "motor"
+        for k, label, _ in MARKERS:
+            b, v = self.moves[k], self._target(k)
+            if self.at is not None and self.at[2] and k == "xpk":
+                label = "MIN"
+            b.setText("{} → {}".format(motor, label))
+            tip = "" if v is None else "Move {} to {:.10g}".format(motor, v)
+            shift = self._shift(self.at[0]) if v is not None else 0.0
+            if shift:
+                tip += ": the scan's {:.10g}, less the {:.10g} a stage's set has moved {} by since".format(
+                    v + shift, shift, motor)
+            b.setToolTip(tip)
+            b.setEnabled(self.allowed and v is not None)
 
     def start(self, scan):
         self.live = scan
@@ -85,6 +130,8 @@ class ScanTab(qt.QWidget):
                 entry[1] = stage
         if self.scans.currentIndex() == len(self.kept) - 1 and self.kept and self.kept[-1][0] is scan:
             self._draw(scan, stage)
+        else:
+            self._buttons()  # its set moves an earlier scan's targets
 
     def _redraw(self):
         if self._dirty and self.live is not None and self._current() is self.live:
@@ -100,6 +147,12 @@ class ScanTab(qt.QWidget):
             self._draw(*self.kept[k])
 
     def _draw(self, scan, stage):
+        self.at = (scan,) + self._plot(scan, stage)
+        self._buttons()
+
+    def _plot(self, scan, stage):
+        """Draws `scan`; the statistics drawn, None while it runs or with
+        none, and whether they are of a dip."""
         plot = self.plot
         plot.clearMarkers()
         plot.setGraphTitle(scan.title)
@@ -110,7 +163,7 @@ class ScanTab(qt.QWidget):
         else:
             plot.remove("scan", kind="curve")
         if scan is self.live:
-            return
+            return None, False
         if stage is None:
             st = scan.stats()
         else:
@@ -120,7 +173,7 @@ class ScanTab(qt.QWidget):
         if st is None:
             self._say([("no points" + (" ({})".format(docs.outcome(scan.exit_status, scan.reason))
                                        if scan.exit_status else ""), None)])
-            return
+            return None, False
         # A dip's statistics are of the scan turned over: its maximum is
         # the dip's depth, at the scan's minimum.
         dip = stage is not None and bool(stage.get("dip"))
@@ -145,6 +198,7 @@ class ScanTab(qt.QWidget):
         if scan.exit_status and scan.exit_status != "success":
             line.append(("  ({})".format(docs.outcome(scan.exit_status, scan.reason)), None))
         self._say(line)
+        return st, dip
 
     def _say(self, parts):
         """The stats line from (text, colour or None) parts."""

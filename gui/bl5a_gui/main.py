@@ -124,6 +124,8 @@ class MainWindow(qt.QMainWindow):
         self.console = SpecConsole(self.pvs)
         self.commandsView = CommandsView()
         self.messages = MessagesView()
+        self.scanTab.moveRequested.connect(self.motors.moveTo)
+        self.motors.failed.connect(self.messages.add)
 
         self.hosts = {"window": self, "alignment": self.alignment}
         for host in self.hosts.values():
@@ -449,6 +451,7 @@ class MainWindow(qt.QMainWindow):
         """What the operator may do in this state (gate.allowed)."""
         ok = gate.allowed(self.qs, self.spec, self.afterFrame.asked)
         self.motors.setAllowed(ok["spec"])
+        self.scanTab.setAllowed(ok["spec"])
         self.console.setAllowed(ok["spec"])
         self.pauseAct.setEnabled(ok["pause"])
         self.resumeAct.setEnabled(ok["resume"])

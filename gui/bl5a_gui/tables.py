@@ -85,7 +85,7 @@ class StagesTable(_Table):
              "COM {}, MAX at {}".format(_fmt(stage.get("com")), _fmt(stage.get("xmax"))), None, None,
              "set {} {} at {}: the user offset moved by {}".format(
                  stage.get("motor"), _fmt(stage.get("set")), _fmt(stage.get("target")),
-                 _fmt(stage["target"] - stage["set"])) if stage.get("set") is not None else None))
+                 _fmt(docs.zero_shift(stage))) if stage.get("set") is not None else None))
 
 
 class HistoryTable(_Table):

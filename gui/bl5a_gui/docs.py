@@ -92,6 +92,13 @@ def outcome(exit_status, reason=None):
     return "{}: {}".format(exit_status, reason) if reason else exit_status
 
 
+def zero_shift(stage):
+    """How far a stage's `set` moved its motor's positions: target − set,
+    a point's position before the stage less its position after; 0 when
+    the stage set nothing."""
+    return stage["target"] - stage["set"] if stage.get("set") is not None else 0.0
+
+
 def history_row(run):
     """The alignment history's row for a finished alignment with stages:
     what it left the sample at. A scan item's stage is no alignment's.
@@ -108,7 +115,7 @@ def history_row(run):
     dth0 = None
     for s in run.stages:
         if s.get("motor") == "th" and s.get("set") is not None:
-            dth0 = (dth0 or 0.0) + s["target"] - s["set"]
+            dth0 = (dth0 or 0.0) + zero_shift(s)
     final = run.final or {}
     return {
         "series": run.series,

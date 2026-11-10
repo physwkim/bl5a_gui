@@ -1,7 +1,9 @@
 """ScanTab's markers: a stage's scan shows the statistics the stage moved
 by, which are of its outlier-filtered points, not of the points drawn;
 the lines carry no text, their names in the stats line are their key.
-The curve plots leave room above and below their points."""
+The curve plots leave room above and below their points. A finished
+scan's CEN, COM and MAX are buttons that move its motor there, while
+SPEC is free."""
 
 import math
 import unittest
@@ -110,6 +112,88 @@ class ScanTabTest(unittest.TestCase):
         self.assertNotIn(">COM</span>", self.tab.stats.text(), "no key to a line not drawn")
         self.assertNotIn("outlier", self.shown())
         self.assertTrue(math.isnan(float(self.shown().split("COM ")[1].split()[0])))
+
+    def sent(self, k):
+        """Where clicking the button to `k` moves the motor."""
+        out = []
+        self.tab.moveRequested.connect(lambda motor, value: out.append((motor, value)))
+        self.tab.moves[k].click()
+        return out
+
+    def test_a_move_waits_for_spec(self):
+        cen = peak.stats(X, Y).cen
+        self.assertEqual(self.tab.moves["cen"].text(), "th → CEN")
+        self.assertEqual(self.sent("cen"), [], "SPEC is not free")
+        self.tab.setAllowed(True)
+        self.assertEqual(self.sent("cen"), [("th", cen)])
+        self.assertEqual(self.tab.moves["cen"].toolTip(), "Move th to {:.10g}".format(cen))
+
+    def test_a_running_scan_has_nothing_to_move_to(self):
+        self.tab.setAllowed(True)
+        self.tab.start(docs.Scan("v", "lup", "sy", "det", {}))
+        self.assertEqual([b.isEnabled() for b in self.tab.moves.values()], [False] * 3)
+        self.assertEqual(self.tab.moves["cen"].text(), "sy → CEN")
+
+    def test_a_stage_moves_by_its_statistics_a_dip_to_its_minimum(self):
+        f = peak.stats(X, FILTERED)
+        stage = {"pick": "CEN", "dip": True, "target": f.cen, "cen": f.cen, "com": None, "xmax": f.xpk,
+                 "fwhm": f.fwhm, "ymax": f.ymax, "rejected": 1}
+        self.tab.setAllowed(True)
+        self.tab.stage(self.scan, stage)
+        self.assertEqual(self.tab.moves["xpk"].text(), "th → MIN")
+        self.assertEqual(self.sent("xpk"), [("th", f.xpk)])
+        self.assertFalse(self.tab.moves["com"].isEnabled(), "no COM to move to")
+
+    def test_an_earlier_scan_picked_moves_its_own_motor(self):
+        later = docs.Scan("v", "ascan", "sy", "det", {})
+        for x, y in zip(X, Y[::-1]):
+            later.add({"sy": x, "det": y})
+        self.tab.start(later)
+        self.tab.stop(later)
+        self.tab.setAllowed(True)
+        self.assertEqual(self.sent("xpk"), [("sy", peak.stats(X, Y[::-1]).xpk)])
+        self.tab._show(0)
+        self.assertEqual(self.sent("xpk"), [("th", peak.stats(X, Y).xpk)])
+
+    def test_a_stage_that_set_its_motor_moves_in_the_new_positions(self):
+        f = peak.stats(X, FILTERED)
+        stage = {"pick": "CEN", "target": f.cen, "cen": f.cen, "com": f.com, "xmax": f.xpk, "fwhm": f.fwhm,
+                 "ymax": f.ymax, "rejected": 1, "set": 0}
+        self.tab.setAllowed(True)
+        self.tab.stage(self.scan, stage)
+        self.assertEqual(self.sent("cen"), [("th", 0.0)])
+        self.assertEqual(self.sent("com"), [("th", f.com - f.cen)])
+        self.assertIn("a stage's set has moved th by since", self.tab.moves["com"].toolTip())
+
+    def scanned(self, motor, y):
+        s = docs.Scan(motor + str(len(y)), "lup", motor, "det", {})
+        for x, v in zip(X, y):
+            s.add({motor: x, "det": v})
+        self.tab.start(s)
+        self.tab.stop(s)
+        return s
+
+    def test_a_later_set_of_the_motor_moves_an_earlier_scans_targets(self):
+        sy, th = self.scanned("sy", Y), self.scanned("th", Y[::-1])
+        self.tab.setAllowed(True)
+        self.tab.scans.setCurrentIndex(0)
+        self.tab._show(0)
+        xpk = peak.stats(X, Y).xpk
+        self.tab.stage(sy, {"pick": "CEN", "target": 3.0, "set": 0})
+        self.assertEqual(self.sent("xpk"), [("th", xpk)], "sy's set is not th's")
+        self.assertEqual(self.tab.moves["xpk"].toolTip(), "Move th to {:.10g}".format(xpk))
+        self.tab.stage(th, {"pick": "CEN", "target": 2.5, "set": 1})
+        self.assertEqual(self.sent("xpk"), [("th", xpk - 1.5)])
+        self.assertIn("less the 1.5", self.tab.moves["xpk"].toolTip())
+
+    def test_a_motor_not_in_spec_ioc_is_not_moved(self):
+        other = docs.Scan("w", "ascan", "chi", "det", {})
+        for x, y in zip(X, Y):
+            other.add({"chi": x, "det": y})
+        self.tab.start(other)
+        self.tab.stop(other)
+        self.tab.setAllowed(True)
+        self.assertEqual([b.isEnabled() for b in self.tab.moves.values()], [False] * 3)
 
 
 if __name__ == "__main__":

@@ -75,8 +75,8 @@ the size, place and layout they had when closed, kept in
 
 SPEC runs one command at a time. While the queue runs a plan, the plan
 owns SPEC, so the GUI greys out everything that would send SPEC a
-command of its own: the motor tweak buttons, their step fields and the
-SPEC console's entry.
+command of its own: the motor tweak buttons, their step fields, the
+scan plot's move buttons and the SPEC console's entry.
 
 They are live only when all of these hold:
 
@@ -569,6 +569,21 @@ off it. A dip's stage gives DIP, its depth, and its position for the
 maximum, and marks the minimum MIN. Any other scan shows the statistics of its points as taken. A
 scan that did not end in success shows its exit
 status and why; the whole line is in its tooltip when it does not fit.
+
+The buttons right of the **Scan** list, **th → CEN**, **th → COM** and
+**th → MAX** (named after the scan's motor, and **MIN** for a dip),
+move the motor to the drawn CEN, COM or maximum, as SPEC's `CEN`,
+`pl_COM` and `pl_xMAX` do after a scan; the tooltip gives the position.
+The move goes to the motor record, as the Motors pane's ◀ ▶ do, so it
+is live only when SPEC takes commands (see
+[Who drives SPEC](#who-drives-spec)), and only for a finished scan of
+one of the Motors pane's motors with that statistic. It works on any
+scan picked in the **Scan** list. A stage with **Set to**, the scan's
+own or a later one of the same motor, renumbers the motor's positions
+by its target − set; the button goes to the same point in the new
+numbers, and its tooltip gives both. A `set` typed in the SPEC pane or
+sent by a SPEC block is not seen. A move SPEC refuses adds a line to
+**Messages**; the SPEC pane says why.
 
 The **Scan** list keeps this window's last 100 scans; pick one to look
 at it again. Every scan, from any window or none, is also appended to

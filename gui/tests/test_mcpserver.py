@@ -232,7 +232,7 @@ def test_tweak_returns_the_readback_of_an_accepted_move():
 
 
 def test_tweak_of_a_refused_move_is_an_error():
-    bl, _ = tweak(0x2 | mcpserver.MSTA_PROBLEM)
+    bl, _ = tweak(0x2 | config.MSTA_PROBLEM)
     with pytest.raises(mcpserver.ToolError, match="SPEC refused the tth move"):
         bl.tweak("tth", 0.5, "forward")
     assert bl.spec_job is None
