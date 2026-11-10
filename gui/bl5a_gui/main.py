@@ -242,8 +242,12 @@ class MainWindow(qt.QMainWindow):
                 for before, after in zip(names, names[1:]):
                     host.tabifyDockWidget(self.panes[before], self.panes[after])
                 self.panes[names[0]].raise_()
+        # The left panes as wide as the wider of their contents at the font
+        # in use, beside the scroll bar of Setup, which is taller than them.
+        left = [self.panes[name].widget() for name in ("setup", "motors")]
+        width = max(a.widget().minimumSizeHint().width() for a in left) + left[0].verticalScrollBar().sizeHint().width()
         self.resizeDocks([self.panes["motors"], self.panes["queue"]],
-                         [430, self.queueView.minimumSizeHint().width()], qt.Qt.Horizontal)
+                         [width, self.queueView.minimumSizeHint().width()], qt.Qt.Horizontal)
         self.resizeDocks([self.panes["spec"]], [200], qt.Qt.Vertical)
         self.alignment.resizeDocks([self.panes["stages"]], [230], qt.Qt.Vertical)
 

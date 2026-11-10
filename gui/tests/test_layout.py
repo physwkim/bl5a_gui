@@ -53,6 +53,18 @@ class LayoutTest(unittest.TestCase):
         self.assertGreaterEqual(w.centralWidget().viewport().width(), w.tabs.minimumSizeHint().width())
         self.assertEqual(w.centralWidget().horizontalScrollBar().maximum(), 0)
 
+    def test_the_first_layout_at_the_gui_font_shows_the_left_panes_whole(self):
+        font = self.app.font()
+        self.addCleanup(self.app.setFont, font)
+        self.app.setFont(qt.QFont(config.FONT, config.FONT_PT))
+        w = self.window()
+        for name in ("setup", "motors"):
+            w.panes[name].raise_()
+            self.app.processEvents()
+            area = w.panes[name].widget()
+            self.assertGreaterEqual(area.viewport().width(), area.widget().minimumSizeHint().width(), name)
+        self.assertGreaterEqual(w.centralWidget().viewport().width(), w.tabs.minimumSizeHint().width())
+
     def test_layout_outlives_the_window_until_reset(self):
         w = self.window()
         w.panes["queue"].setFloating(True)
