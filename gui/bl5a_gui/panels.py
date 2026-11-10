@@ -17,22 +17,28 @@ def _dot(color):
 
 class StatusBar(qt.QWidget):
     """Ring, shutter, SPEC, qs, temperature, mar345 and its last file, one
-    label each. A PV that is not configured or not connected reads "—"."""
+    label each, on two rows: one row is wider than the main window. A PV
+    that is not configured or not connected reads "—"."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        layout = qt.QHBoxLayout(self)
+        layout = qt.QVBoxLayout(self)
         layout.setContentsMargins(4, 2, 4, 2)
+        layout.setSpacing(2)
         self.labels = {}
-        for key, caption in (("ring", "Ring"), ("shutter", "Shutter"), ("spec", "SPEC"), ("qs", "QS"),
-                             ("temp", "T"), ("mar", "MAR"), ("file", "File")):
-            label = qt.QLabel(self)
-            label.setTextFormat(qt.Qt.RichText)
-            self.labels[key] = (caption, label)
-            layout.addWidget(label, 1 if key == "file" else 0)
-            if key != "file":
-                layout.addSpacing(14)
-            self.set(key, DASH)
+        for fields in ((("ring", "Ring"), ("shutter", "Shutter"), ("spec", "SPEC"), ("qs", "QS")),
+                       (("temp", "T"), ("mar", "MAR"), ("file", "File"))):
+            row = qt.QHBoxLayout()
+            layout.addLayout(row)
+            for key, caption in fields:
+                if row.count():
+                    row.addSpacing(14)
+                label = qt.QLabel(self)
+                label.setTextFormat(qt.Qt.RichText)
+                self.labels[key] = (caption, label)
+                row.addWidget(label)
+                self.set(key, DASH)
+            row.addStretch(1)
         self.labels["file"][1].setTextInteractionFlags(qt.Qt.TextSelectableByMouse)
 
     def set(self, key, rich):

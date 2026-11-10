@@ -1,8 +1,8 @@
-"""The BL5A main window: run buttons and status line on top; the
-Alignment, Image, Stack and Calibration tabs in the centre; panes the
-operator can move, float, close and resize: around the tabs motors and
-the forms on the left, the queue on the right, SPEC, commands and
-messages below; in the Alignment tab the stages and alignment history
+"""The BL5A main window: run buttons and status line on top; the queue in
+the centre; panes the operator can move, float, close and resize: around
+the queue motors and the forms on the left, SPEC, commands and messages
+below. Beside it the plots window: the Alignment, Image, Stack and
+Calibration tabs; in the Alignment tab the stages and alignment history
 below its scan plot."""
 
 import argparse
@@ -29,13 +29,12 @@ STOP_ALL = config.SPEC + "Cmd:Abort"
 # tabs (the first in front) or split it.
 PANES = (
     ("window", qt.Qt.LeftDockWidgetArea, True, ("setup", "motors")),
-    ("window", qt.Qt.RightDockWidgetArea, False, ("queue",)),
     ("window", qt.Qt.BottomDockWidgetArea, True, ("spec", "commands", "messages")),
     ("alignment", qt.Qt.BottomDockWidgetArea, False, ("stages", "history")),
 )
 # A saved layout of another version is not restored: the panes it
 # placed have moved since.
-LAYOUT = 1
+LAYOUT = 2
 
 
 def _scrolled(widget):
@@ -110,10 +109,15 @@ class MainWindow(qt.QMainWindow):
         self.tabs.addTab(self.imageTab, "Image")
         self.tabs.addTab(self.stackTab, "Stack")
         self.tabs.addTab(self.calibTab, "Calibration")
-
-        self.setCentralWidget(_scrolled(self.tabs))
+        # Its own window, so the plots can take a screen of their own; no
+        # parent, which would keep it above this window.
+        self.plots = qt.QMainWindow()
+        self.plots.setWindowTitle("BL5A plots")
+        self.plots.setCentralWidget(_scrolled(self.tabs))
+        self.destroyed.connect(self.plots.deleteLater)
 
         self.queueView = QueueTable()
+        self.setCentralWidget(_scrolled(self.queueView))
         self.stages = StagesTable()
         self.history = HistoryTable()
         self.console = SpecConsole(self.pvs)
@@ -128,7 +132,7 @@ class MainWindow(qt.QMainWindow):
         self.panes = {}
         for name, title, widget in (
                 ("motors", "Motors", self.motors), ("setup", "Setup", setup),
-                ("queue", "Queue", self.queueView), ("stages", self.stages.caption, self.stages),
+                ("stages", self.stages.caption, self.stages),
                 ("history", "Alignment history", self.history), ("spec", "SPEC", self.console),
                 ("commands", "Commands", self.commandsView), ("messages", "Messages", self.messages)):
             pane = qt.QDockWidget(title, hostOf[name])
@@ -168,8 +172,13 @@ class MainWindow(qt.QMainWindow):
         self.resetLayoutAct = qt.QAction("Reset layout", self)
         self.resetLayoutAct.setToolTip("Every pane shown and back where a first start puts it")
         self.resetLayoutAct.triggered.connect(self.defaultLayout)
+        self.plotsAct = qt.QAction("Plots window", self)
+        self.plotsAct.setToolTip("The plots window shown and in front")
+        self.plotsAct.triggered.connect(self._showPlots)
         self._view(self.menuBar().addMenu("View"))
-        self.resize(1850, 1000)
+        separator = self.style().pixelMetric(qt.QStyle.PM_DockWidgetSeparatorExtent)
+        self.resize(self._leftWidth() + separator + self.queueView.minimumSizeHint().width(), 1000)
+        self.move(self.screen().availableGeometry().topLeft())
         self.defaultLayout()
         self._restoreLayout()
 
@@ -230,7 +239,8 @@ class MainWindow(qt.QMainWindow):
 
     # -- layout --------------------------------------------------------
     def defaultLayout(self):
-        """Every pane shown and docked where a first start puts it."""
+        """Every pane shown and docked where a first start puts it, and the
+        plots window beside this one, as tall, to the edge of the screen."""
         for host, area, tabbed, names in PANES:
             host = self.hosts[host]
             for name in names:
@@ -242,19 +252,49 @@ class MainWindow(qt.QMainWindow):
                 for before, after in zip(names, names[1:]):
                     host.tabifyDockWidget(self.panes[before], self.panes[after])
                 self.panes[names[0]].raise_()
-        # The left panes as wide as the wider of their contents at the font
-        # in use, beside the scroll bar of Setup, which is taller than them.
-        left = [self.panes[name].widget() for name in ("setup", "motors")]
-        width = max(a.widget().minimumSizeHint().width() for a in left) + left[0].verticalScrollBar().sizeHint().width()
-        self.resizeDocks([self.panes["motors"], self.panes["queue"]],
-                         [width, self.queueView.minimumSizeHint().width()], qt.Qt.Horizontal)
+        self.resizeDocks([self.panes["motors"]], [self._leftWidth()], qt.Qt.Horizontal)
         self.resizeDocks([self.panes["spec"]], [200], qt.Qt.Vertical)
         self.alignment.resizeDocks([self.panes["stages"]], [230], qt.Qt.Vertical)
+        self._placePlots()
+        self.plots.setVisible(self.isVisible())  # the first start shows it with this window
+
+    def _placePlots(self):
+        # Its frame as this window's, which the window manager draws the same.
+        frame, screen = self.frameGeometry(), self.screen().availableGeometry()
+        border = frame.width() - self.width()
+        width = max(screen.right() - frame.right() - border, self.tabs.minimumSizeHint().width())
+        self.plots.resize(width, self.height())
+        self.plots.move(min(frame.right() + 1, screen.right() + 1 - width - border), frame.top())
+
+    def eventFilter(self, watched, event):
+        # The first start places the plots window again once the window
+        # manager has framed this one: its border is not known before.
+        if watched is self.windowHandle() and event.type() == qt.QEvent.Expose and watched.isExposed():
+            watched.removeEventFilter(self)
+            self._placePlots()
+        return super().eventFilter(watched, event)
+
+    def _leftWidth(self):
+        # As wide as the wider of their contents at the font in use, beside
+        # the scroll bar of Setup, which is taller than them.
+        left = [self.panes[name].widget() for name in ("setup", "motors")]
+        return max(a.widget().minimumSizeHint().width() for a in left) + left[0].verticalScrollBar().sizeHint().width()
+
+    def setVisible(self, visible):
+        # The plots window shows and closes with this one.
+        super().setVisible(visible)
+        self.plots.setVisible(visible)
+
+    def _showPlots(self):
+        self.plots.show()
+        self.plots.raise_()
+        self.plots.activateWindow()
 
     def _view(self, menu):
         for pane in self.panes.values():
             menu.addAction(pane.toggleViewAction())
         menu.addSeparator()
+        menu.addAction(self.plotsAct)
         menu.addAction(self.resetLayoutAct)
 
     def createPopupMenu(self):
@@ -269,6 +309,12 @@ class MainWindow(qt.QMainWindow):
         geometry = s.value("window/geometry")
         if geometry is not None:
             self.restoreGeometry(geometry)
+        geometry = s.value("plots/geometry")
+        if geometry is not None:
+            self.plots.restoreGeometry(geometry)
+        else:
+            self.winId()  # its native window, to learn when it is first exposed
+            self.windowHandle().installEventFilter(self)
         for key, host in self.hosts.items():
             state = s.value(key + "/state")
             if state is not None:
@@ -277,6 +323,7 @@ class MainWindow(qt.QMainWindow):
     def _saveLayout(self):
         s = qt.QSettings(*config.SETTINGS)
         s.setValue("window/geometry", self.saveGeometry())
+        s.setValue("plots/geometry", self.plots.saveGeometry())
         for key, host in self.hosts.items():
             s.setValue(key + "/state", host.saveState(LAYOUT))
 

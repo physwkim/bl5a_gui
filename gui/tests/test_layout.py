@@ -1,7 +1,7 @@
-"""The panes around the plots: each can shrink below its contents, the
-layout outlives the window, Reset layout brings back the first one, and
-no menu hides the run toolbar. The alignment's panes are on the
-Alignment tab only."""
+"""The panes around the queue and the plots window beside it: each can
+shrink below its contents, the layout outlives the window, Reset layout
+brings back the first one, and no menu hides the run toolbar. The
+alignment's panes are on the Alignment tab only."""
 
 import os
 import tempfile
@@ -38,22 +38,22 @@ class LayoutTest(unittest.TestCase):
 
     def test_queue_and_plots_shrink_below_their_contents(self):
         w = self.window()
-        queue = w.panes["queue"]
-        self.assertGreaterEqual(queue.widget().viewport().width(), w.queueView.minimumSizeHint().width(),
+        queue = w.centralWidget()
+        self.assertGreaterEqual(queue.viewport().width(), w.queueView.minimumSizeHint().width(),
                                 "the first layout shows the whole queue")
-        w.resizeDocks([queue], [200], qt.Qt.Horizontal)
+        w.resizeDocks([w.panes["motors"]], [1300], qt.Qt.Horizontal)
         self.app.processEvents()
         self.assertLess(queue.width(), w.queueView.minimumSizeHint().width())
-        w.resizeDocks([queue], [1300], qt.Qt.Horizontal)
+        w.plots.resize(300, 300)
         self.app.processEvents()
-        self.assertLess(w.centralWidget().width(), w.stackTab.minimumSizeHint().width())
+        self.assertLess(w.plots.centralWidget().width(), w.stackTab.minimumSizeHint().width())
 
     def test_the_first_layout_shows_every_tab_whole(self):
         w = self.window()
-        self.assertGreaterEqual(w.centralWidget().viewport().width(), w.tabs.minimumSizeHint().width())
-        self.assertEqual(w.centralWidget().horizontalScrollBar().maximum(), 0)
+        self.assertGreaterEqual(w.plots.centralWidget().viewport().width(), w.tabs.minimumSizeHint().width())
+        self.assertEqual(w.plots.centralWidget().horizontalScrollBar().maximum(), 0)
 
-    def test_the_first_layout_at_the_gui_font_shows_the_left_panes_whole(self):
+    def test_the_first_layout_at_the_gui_font_shows_the_panes_queue_tabs_and_status_whole(self):
         font = self.app.font()
         self.addCleanup(self.app.setFont, font)
         self.app.setFont(qt.QFont(config.FONT, config.FONT_PT))
@@ -63,16 +63,58 @@ class LayoutTest(unittest.TestCase):
             self.app.processEvents()
             area = w.panes[name].widget()
             self.assertGreaterEqual(area.viewport().width(), area.widget().minimumSizeHint().width(), name)
-        self.assertGreaterEqual(w.centralWidget().viewport().width(), w.tabs.minimumSizeHint().width())
+        self.assertGreaterEqual(w.centralWidget().viewport().width(), w.queueView.minimumSizeHint().width())
+        self.assertGreaterEqual(w.plots.centralWidget().viewport().width(), w.tabs.minimumSizeHint().width())
+        # A plan stopping after its frame, a temperature ramp and a frame's path.
+        w.status.setQs({"re_state": "running", "running_item_name": "battery_cycle", "items_in_queue": 12,
+                        "worker_environment_exists": True}, stopping=True)
+        w.status.setTemperature(30.0, 25.12, 1.0)
+        w.status.set("file", "/home/bl5a/data/2026-11-10/insitu_cell3/insitu_cell3_00012.mar3450")
+        self.app.processEvents()
+        for key, (_, label) in w.status.labels.items():
+            self.assertGreaterEqual(label.width(), label.sizeHint().width(), key)
+
+    def test_the_tabs_are_in_a_window_of_their_own(self):
+        w = self.window()
+        self.assertIs(w.tabs.window(), w.plots)
+        self.assertTrue(w.plots.isVisible())
+        self.assertLessEqual(w.plots.frameGeometry().right(), w.screen().availableGeometry().right(),
+                             "placed again with the frame the window got when shown")
+        w.plots.close()
+        self.assertTrue(w.isVisible())
+        w.plotsAct.trigger()
+        self.assertTrue(w.plots.isVisible())
+        w.close()
+        self.assertFalse(w.plots.isVisible(), "it closes with the window")
+
+    def test_the_plots_window_is_beside_the_window_to_the_edge_of_the_screen(self):
+        w = self.window()
+        tabs = w.tabs.minimumSizeHint().width()
+        for screen in (qt.QRect(0, 0, 3840, 2100), qt.QRect(0, 0, w.frameGeometry().width() + tabs // 2, 2100)):
+            with mock.patch.object(w, "screen") as s:
+                s.return_value.availableGeometry.return_value = screen
+                w.defaultLayout()
+            self.app.processEvents()
+            plots, frame = w.plots.frameGeometry(), w.frameGeometry()
+            room = screen.right() - frame.right() >= tabs
+            self.assertEqual(plots.left() == frame.right() + 1, room, screen)
+            self.assertEqual(plots.right(), screen.right(), screen)
+            self.assertEqual((plots.top(), w.plots.height()), (frame.top(), w.height()), screen)
+            self.assertGreaterEqual(w.plots.width(), tabs, screen)
 
     def test_layout_outlives_the_window_until_reset(self):
         w = self.window()
-        w.panes["queue"].setFloating(True)
+        w.panes["spec"].setFloating(True)
         w.panes["history"].close()
+        w.plots.setGeometry(100, 120, 700, 500)
+        self.app.processEvents()
+        plots = w.plots.geometry()
         w.close()
         w = self.window()
-        self.assertTrue(w.panes["queue"].isFloating())
+        self.assertTrue(w.panes["spec"].isFloating())
         self.assertFalse(w.panes["history"].isVisible())
+        self.assertEqual(w.plots.geometry(), plots)
+        w.plots.close()
         w.resetLayoutAct.trigger()
         self.app.processEvents()
         self.app.sendPostedEvents(None, qt.QEvent.DeferredDelete)  # the tab bars the reset retired
@@ -87,13 +129,14 @@ class LayoutTest(unittest.TestCase):
             self.assertEqual(host.tabifiedDockWidgets(panes[0]), panes[1:] if tabbed else [], names)
             if tabbed:
                 self.assertIn(panes[0].windowTitle(), fronts, "the first pane is the tab in front")
+        self.assertTrue(w.plots.isVisible())
 
     def test_a_layout_saved_before_the_tabs_is_not_restored(self):
         w = self.window()
-        w.panes["queue"].setFloating(True)
+        w.panes["spec"].setFloating(True)
         qt.QSettings(*config.SETTINGS).setValue("window/state", w.saveState())  # as saved before LAYOUT
         w = self.window()
-        self.assertFalse(w.panes["queue"].isFloating())
+        self.assertFalse(w.panes["spec"].isFloating())
 
     def test_the_alignment_panes_show_on_its_tab_only(self):
         w = self.window()
@@ -111,7 +154,7 @@ class LayoutTest(unittest.TestCase):
             for bar in w.findChildren(qt.QToolBar):
                 self.assertNotIn(bar.toggleViewAction(), actions, bar.windowTitle())
             self.assertEqual([a for a in actions if not a.isSeparator()],
-                             [p.toggleViewAction() for p in w.panes.values()] + [w.resetLayoutAct])
+                             [p.toggleViewAction() for p in w.panes.values()] + [w.plotsAct, w.resetLayoutAct])
 
 
 if __name__ == "__main__":
