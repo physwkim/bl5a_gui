@@ -1,6 +1,6 @@
 # Using the BL5A GUI
 
-This is the operator's guide to the window: what each part shows, what
+This is the operator's guide to the windows: what each part shows, what
 each button sends, and the two experiments from start to end. To build
 the programs and set them up at the beamline, see [install.md](install.md).
 
@@ -16,7 +16,7 @@ beamline runs the mar345 IOC. You start SPEC in server mode, then the GUI
 with the **BL5A** shortcut on the desktop or in the applications menu.
 `systemctl --user status 'bl5a*'` shows whether the services run.
 
-In a terminal, `deploy/bl5a-gui` starts the same window and takes these
+In a terminal, `deploy/bl5a-gui` starts the same GUI and takes these
 options:
 
 | Option | Default | What it is |
@@ -28,29 +28,37 @@ options:
 | `--user` | `bl5a` | the name in the queue's User column |
 
 You can close the GUI at any time. The queue keeps running in bl5a-qs and
-the stacks stay with the integrator. A new window starts with an empty
+the stacks stay with the integrator. The GUI starts again with an empty
 Alignment tab and empty Commands and Messages panes: they are filled
-from what the plans report while the window is open. The Stack tab asks
+from what the plans report while the GUI is open. The Stack tab asks
 the integrator, so it shows every stack it holds.
 
-## The window
+## The windows
 
-![The window at rest](img/overview-idle.png)
+The GUI opens two windows side by side: the main window, which runs the
+experiment, and the plots window.
+
+![The main window, left, and the plots window at rest](img/overview-idle.png)
 
 | Area | What is in it |
 | --- | --- |
 | Top | the View menu, the run buttons (Pause, Resume, Stop, Abort, Stop all) and the status line |
 | Left | the Setup and Motors panes, as tabs; Setup holds the Data and Integration boxes, the Alignment box, the Battery, In-situ and Scan forms |
-| Centre | the Alignment tab: the scan plot, with the Stages of the running alignment and the Alignment history below it; the Image, Stack and Calibration tabs |
-| Right | the Queue |
+| Centre | the Queue |
 | Bottom | the SPEC console, the Commands the plans sent, the GUI's Messages, as tabs |
+| Plots window | the Alignment tab: the scan plot, with the Stages of the running alignment and the Alignment history below it; the Image, Stack and Calibration tabs |
 
 The Stages and Alignment history panes belong to the Alignment tab, so
-the Image, Stack and Calibration tabs have the whole centre to
+the Image, Stack and Calibration tabs have the whole plots window to
 themselves.
 
+The first start puts the plots window beside the main window, as tall,
+out to the right edge of the screen; with a second screen it can take
+that screen. Closing it only hides it: **View → Plots window** shows it
+again. Closing the main window closes both.
+
 Every pane has a title bar. Drag the edge between two panes, or between
-a pane and the centre tabs or the scan plot, to resize them; a pane
+a pane and the queue or the scan plot, to resize them; a pane
 smaller than its contents scrolls them. Drag a title bar to another
 side, or onto another pane to share its place as a tab; the Stages and
 Alignment history panes move only inside the Alignment tab. The
@@ -58,9 +66,10 @@ button left of × on the title bar, or a double click on the title bar,
 floats the pane as a window of its own, which can go to another screen;
 the same again docks it back. × closes the pane. The **View** menu,
 also on a right click on a docked pane's title bar, shows a closed pane
-again, and **Reset layout** puts every pane back where the first start
-puts it. The next start opens the window at the size and layout it had
-when closed, kept in `~/.config/bl5a/bl5a-gui.conf`.
+again, and **Reset layout** puts every pane and the plots window back
+where the first start puts them. The next start opens both windows at
+the size, place and layout they had when closed, kept in
+`~/.config/bl5a/bl5a-gui.conf`.
 
 ### Who drives SPEC
 
