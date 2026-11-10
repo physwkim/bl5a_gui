@@ -616,11 +616,13 @@ One row runs, in order:
 2. With align: the Alignment sequence ([Thin film](#thin-film) unless
    another is picked).
 3. With a th list: `mymar_in`. If tth is below 40 it first closes the
-   shutter and moves through `uan 45 0` to the in-situ positions. Then
-   `uan 81 0`, `counters 2 3`, `fi 1 0 0 0`, `ic_range 5`,
-   `ic_offset 0`, `mar_ip7 25 440 42.4 340 81.8 1.2 -6.8`, 5 s,
-   `scell` to 0.9, a frame at each th, `ic_offset 1`, `fi 1 0 1 1`,
-   back to tth 42 with the mar345 out of the way, and `uan 1 0`.
+   shutter, `uan 45 0`, takes tth to 83 and then the mar345 to the
+   in-situ positions. Then `uan 83 0`, `counters 2 3`, `fi 1 0 0 0`,
+   `ic_range 5`, `ic_offset 0`, `mar_ip7 25 440 42.4 340 81.8 1.2 -6.8`,
+   5 s, `scell` to 0.9, a frame at each th, `ic_offset 1`,
+   `fi 1 0 1 1`, the mar345 out of the way, tth to 42, and `uan 1 0`.
+   The macro has 81 and moves tth with the mar345; the plan keeps to
+   the mar345's interlock ([Run buttons](#run-buttons)).
 
 | Button | What it does |
 | --- | --- |
@@ -864,7 +866,7 @@ The rules are the GUI's:
 - The logs hold what happened since the server started. Each read gives
   `last`; pass it as `since` next time to get only the new lines.
 
-As on the Battery form, move tth to 80° or more before a standard
+As on the Battery form, move tth to 83° or more before a standard
 `queue_mar_series` ([Battery measurements](#battery-measurements)); a
 thin-film alignment leaves it near 1.2. Use `tweak`, or `spec_command`
 with `umv tth 83` at the beamline.

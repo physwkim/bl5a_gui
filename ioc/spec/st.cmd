@@ -18,7 +18,7 @@ epicsEnvSet("EPICS_DB_INCLUDE_PATH", "$(MOTOR)/db:$(SPEC_IOC)/db")
 # The 20 ms moving poll matches bl5a-sim's event tick, so a fly scan's
 # RBV lags the counts by at most one tick.
 # The mar345 hits the tth arm when it moves with tth low (mymar_in lifts
-# tth to 45 before it moves the mar in, align_in moves it out below
+# tth to 83 before it moves the mar in, align_in moves it out below
 # martran 1200): the mar's motors move only with tth >= 83, and tth goes
 # below 83 only with martran >= 1200. A motor record's move that breaks
 # it is refused; a SPEC move that breaks it is stopped with ^C.

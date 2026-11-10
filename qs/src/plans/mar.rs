@@ -31,6 +31,26 @@ const FILTERS: [u8; 4] = [0, 1, 0, 0];
 const TH_LIST: [f64; 4] = [-0.05, 0.11, 0.13, 0.15];
 const IN_TEXPO: f64 = -7e4;
 const IN_GEOMETRY: &str = "25 440 42.4 340 81.8 1.2 -6.8";
+/// mymar_in's tth with the mar in: spec-ioc's SpecInterlock line
+/// (ioc/spec/st.cmd), where the macro has 81.
+const IN_TTH: f64 = 83.0;
+/// A `umv`'s motors and positions.
+type Move = &'static [(&'static str, f64)];
+/// mymar_in's moves in from tth below 40, to its geometry, and out. The
+/// interlock moves the mar only with tth at IN_TTH or above and takes tth
+/// below it only with the mar out, so the macro's move_alls of tth and
+/// the mar are split: tth first on the way in, last on the way out.
+const MAR_IN: [Move; 3] = [
+    &[("tth", 45.0), ("th", 0.0)], // uan 45 0
+    &[("tth", IN_TTH), ("th", 0.0), ("scell", 0.0)],
+    &[("martran", 25.0), ("marsdd", 440.0), ("marshut", 340.0)],
+];
+const AT_IN: Move = &[("tth", IN_TTH), ("th", 0.0)]; // uan 81 0
+const MAR_OUT: [Move; 3] = [
+    &[("martran", 1234.0), ("marsdd", 835.0), ("marshut", 0.0)],
+    &[("tth", 42.0), ("th", 0.0), ("scell", 6.0)],
+    &[("tth", 1.0), ("th", 0.0)], // uan 1 0
+];
 
 struct Series {
     name: String,
@@ -87,19 +107,12 @@ fn start_delay(i: usize, elapsed: f64, period: f64) -> f64 {
 async fn mymar_in(ops: &Ops<'_>, name: &str, th_list: &[f64], texpo: f64) -> Step {
     if ops.position("tth").await? < 40.0 {
         ops.spec("mar345closeshutter").await?;
-        ops.umv(&[("tth", 45.0), ("th", 0.0)]).await?; // uan 45 0
-        ops.umv(&[
-            ("tth", 81.0),
-            ("th", 0.0),
-            ("scell", 0.0),
-            ("martran", 25.0),
-            ("marsdd", 440.0),
-            ("marshut", 340.0),
-        ])
-        .await?;
+        for m in MAR_IN {
+            ops.umv(m).await?;
+        }
     }
     ops.spec("mar345closeshutter").await?;
-    ops.umv(&[("tth", 81.0), ("th", 0.0)]).await?; // uan 81 0
+    ops.umv(AT_IN).await?;
     ops.spec("counters 2 3").await?;
     ops.spec("mar345closeshutter").await?;
     ops.spec("fi 1 0 0 0").await?;
@@ -115,16 +128,10 @@ async fn mymar_in(ops: &Ops<'_>, name: &str, th_list: &[f64], texpo: f64) -> Ste
     }
     ops.spec("ic_offset 1").await?;
     ops.spec("fi 1 0 1 1").await?;
-    ops.umv(&[
-        ("tth", 42.0),
-        ("th", 0.0),
-        ("martran", 1234.0),
-        ("marsdd", 835.0),
-        ("marshut", 0.0),
-        ("scell", 6.0),
-    ])
-    .await?;
-    ops.umv(&[("tth", 1.0), ("th", 0.0)]).await // uan 1 0
+    for m in MAR_OUT {
+        ops.umv(m).await?;
+    }
+    Ok(())
 }
 
 /// The temperature macros myinsitu `qdo`s: `settemp` and `set_ramp` on the
@@ -478,6 +485,8 @@ pub(super) fn register(reg: &mut Registry, devices: &Devices, root: &Path) {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
     use super::*;
 
     fn temperature(kwargs: serde_json::Value) -> Result<Vec<String>, String> {
@@ -528,6 +537,42 @@ mod tests {
             json!({"soak": [2, 1, 1]}),
         ] {
             assert!(temperature(bad.clone()).is_err(), "{bad}");
+        }
+    }
+
+    /// mymar_in's moves, from the arm down and from the arm up, against
+    /// spec-ioc's SpecInterlock as st.cmd sets it.
+    #[test]
+    fn mymar_in_moves_keep_the_interlock() {
+        let line = include_str!("../../../ioc/spec/st.cmd")
+            .lines()
+            .find_map(|l| l.strip_prefix("SpecInterlock(")?.strip_suffix(')'))
+            .unwrap();
+        let a: Vec<&str> = line.split(", ").map(|a| a.trim_matches('"')).collect();
+        let (arm, out) = (a[1], a[3]);
+        let (clear, away): (f64, f64) = (a[2].parse().unwrap(), a[4].parse().unwrap());
+        let guarded: Vec<&str> = a[5].split(' ').collect();
+        let martran: f64 = IN_GEOMETRY.split(' ').next().unwrap().parse().unwrap();
+        let mar_ip7 = [("martran", martran)];
+        for start in [1.0, 60.0] {
+            let mut at = HashMap::from([(arm, start), (out, 1234.0)]);
+            let mut steps: Vec<&[(&str, f64)]> = Vec::new();
+            if start < 40.0 {
+                steps.extend(MAR_IN);
+            }
+            steps.extend([AT_IN, &mar_ip7[..]]);
+            steps.extend(MAR_OUT);
+            for step in steps {
+                let down = step.iter().any(|&(m, v)| m == arm && v < clear);
+                if step.iter().any(|(m, _)| guarded.contains(m)) {
+                    assert!(at[arm] >= clear && !down, "{step:?} at {arm} {}", at[arm]);
+                }
+                if down {
+                    assert!(at[out] >= away, "{step:?} at {out} {}", at[out]);
+                }
+                at.extend(step.iter().copied());
+            }
+            assert_eq!((at[arm], at[out]), (1.0, 1234.0), "back from {start}");
         }
     }
 

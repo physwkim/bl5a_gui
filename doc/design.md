@@ -204,14 +204,14 @@ SPEC 데이터 파일은 흉내 내지 않으므로 `#Temp:` 줄과 loopscan 점
   martran, marsdd, marshut과, 인터락이 지켜보는 marz, marx, ipbsx, ipbsy만
   둔다.
 - **충돌 인터락**: mar345는 tth가 낮을 때 움직이면 tth 암에 부딪힌다.
-  `SpecInterlock("spec", "tth", 40, "martran", 1200, "martran marz marsdd
-  marshut marx ipbsx ipbsy")`: mar 모터는 tth ≥ 40이고 tth가 40 아래로
+  `SpecInterlock("spec", "tth", 83, "martran", 1200, "martran marz marsdd
+  marshut marx ipbsx ipbsy")`: mar 모터는 tth ≥ 83이고 tth가 83 아래로
   가는 중이 아닐 때만 움직이고, tth는 martran ≥ 1200이고 mar 모터가 멈춰
-  있을 때만 40 아래로 간다. 기준은 매크로에서 왔다(mymar_in은 tth < 40이면
-  45로 올린 뒤 tth 81과 함께 martran 25로 넣고, tth 42와 함께 1234로 뺀 뒤
-  tth 1로 내리고, align_in은 martran < 1200이면 `mar_ip_mode off`를
-  부른다). motor 레코드의 이동은 상태 락 아래에서 거절한다(qs의 `umv tth 81 martran 25`는 tth 이동을 먼저 보내므로 목표가
-  40 이상인 tth 이동 중의 mar 이동은 통과한다). 거절된 축은
+  있을 때만 83 아래로 간다. 그래서 mymar_in은 tth를 83으로 올린 뒤 mar를
+  넣고, mar를 1234로 뺀 뒤 tth를 내린다. align_in은 martran < 1200이면
+  `mar_ip_mode off`를 부른다. motor 레코드의 이동은 상태 락 아래에서
+  거절한다(tth가 83 이상에서 83 이상으로 가는 중이면 mar 이동은
+  통과한다). 거절된 축은
   `Motion::Refused`가 되어 다음 이동이나 받아들여진 요청까지 problem(MSTA
   RA_PROBLEM → STATE/MAJOR)을 보이고, 그 비트는 요청의 DONE=0과 함께
   나간다. spec_axis.db의 `:Resync`가 그때 SYNC로 VAL을 RBV에 되돌린다
@@ -402,14 +402,17 @@ coin_align, Thin film = align_in.mac)이 읽기 전용으로 있고, 이용자 �
   `DELTA_K`가 없어 local로 준다), 아니면 myinsitu 첫 칸처럼 `settemp T` →
   soak = (n, t)이면 `loopscan n t`(온도는 SPEC이 att 카운터와 데이터 파일에
   남긴다; `plotselect`는 보내지 않는다) → blocks가 있으면 그 정렬 → 측정(mymar_in):
-  - tth < 40이면 셔터를 닫고 tth 45·th 0 뒤 tth 81, th 0, scell 0, martran 25,
-    marsdd 440, marshut 340을 한 번에.
-  - tth 81·th 0, `counters 2 3`, `fi 1 0 0 0`, `ic_range 5`, `ic_offset 0`,
+  - tth < 40이면 셔터를 닫고 tth 45·th 0, tth 83·th 0·scell 0, 그 뒤
+    martran 25·marsdd 440·marshut 340.
+  - tth 83·th 0, `counters 2 3`, `fi 1 0 0 0`, `ic_range 5`, `ic_offset 0`,
     `mar_ip7 25 440 42.4 340 81.8 1.2 -6.8`, scell 0.9.
   - th 목록(기본 −0.05, 0.11, 0.13, 0.15)마다 노출. texpo는 프레임당 값을
     그대로 받는다(매크로의 0.7·Texpo, 기본 −7e4 모니터).
-  - `ic_offset 1`, `fi 1 0 1 1`, tth 42, th 0, martran 1234, marsdd 835,
-    marshut 0, scell 6을 한 번에, 그 뒤 tth 1·th 0.
+  - `ic_offset 1`, `fi 1 0 1 1`, martran 1234·marsdd 835·marshut 0, 그 뒤
+    tth 42·th 0·scell 6, 그 뒤 tth 1·th 0.
+
+  매크로는 tth 81이고 tth와 mar를 한 move_all로 옮기지만, 충돌 인터락에
+  맞춰 83으로 올리고 mar는 tth가 83에 있을 때만 옮긴다.
 
   냉각은 같은 plan이다: T 25, ramp 25, wait 없음, soak (3600, t), 정렬·노출
   없음(myinsitu 끝의 `set_ramp 25; settemp 025; plotselect att;
@@ -434,7 +437,7 @@ coin_align, Thin film = align_in.mac)이 읽기 전용으로 있고, 이용자 �
   `changec`, `loopscan`뿐이다. PFCU·증폭기·mon1·mar 셔터·온도는
   SPEC이 시리얼 포트를 쥐고, `mar_ip7`·`mar_ip_mode`는 가드가 매크로에 있고,
   나머지는 SPEC 안의 상태를 바꾼다. `counters`는 모니터 프리셋을 세는 SPEC의
-  MON 채널을 정하므로 빠뜨리면 안 된다. 백틱 없는 이동(tth 81·th 0, scell
+  MON 채널을 정하므로 빠뜨리면 안 된다. 백틱 없는 이동(tth 83·th 0, scell
   0.9 같은 것)은 motor 레코드, 괄호 안의 매크로
   이름은 대응 표기다. `plotselect`는 보내지 않고 plan이 피크를 계산할 채널을
   고른다.

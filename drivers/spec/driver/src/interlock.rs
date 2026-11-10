@@ -247,7 +247,7 @@ mod tests {
     fn a_guarded_motor_moves_with_the_arm_bound_up_only() {
         let (l, n) = (lock(), names());
         let mut axes = at(45.0, 25.0);
-        // umv tth 81 martran 25: qs sends tth's move first.
+        // martran asked for while tth, already up, moves further up.
         axes[TTH].motion = Motion::Moving { target: Some(81.0) };
         assert_eq!(l.refuse(&n, &axes, MARTRAN, 1234.0), None);
         axes[TTH].motion = Motion::Starting { target: 39.0 };
