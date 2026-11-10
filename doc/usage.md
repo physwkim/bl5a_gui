@@ -794,7 +794,7 @@ from bl5a-qs and the integrator. A request bl5a-qs refuses also opens a
 
 ## Walkthrough: a film against temperature
 
-![An in-situ run: the frame, the queue, the stages and the commands](img/overview-insitu.png)
+![An in-situ run: the frame, the queue and the commands](img/overview-insitu.png)
 
 1. Mount the film. Check the **Data** folder and, for the detector
    position `mymar_in` uses, the **Integration** PONI. On the
