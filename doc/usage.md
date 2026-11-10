@@ -43,8 +43,8 @@ experiment, and the plots window.
 | Area | What is in it |
 | --- | --- |
 | Top | the View menu, the run buttons (Pause, Resume, Stop, Abort, Stop all) and the status line |
-| Left | the Setup and Motors panes, as tabs; Setup holds the Data and Integration boxes, the Alignment box, the Battery, In-situ and Scan forms |
-| Centre | the Queue |
+| Left | the Setup pane: the Data and Integration boxes, the Alignment box, the Battery, In-situ and Scan forms |
+| Centre | the Motors pane over the Queue |
 | Bottom | the SPEC console, the Commands the plans sent, the GUI's Messages, as tabs |
 | Plots window | the Alignment tab: the scan plot, with the Stages of the running alignment and the Alignment history below it; the Image, Stack and Calibration tabs |
 
@@ -794,7 +794,7 @@ from bl5a-qs and the integrator. A request bl5a-qs refuses also opens a
 
 ## Walkthrough: a film against temperature
 
-![An in-situ run: the frame, the queue and the commands](img/overview-insitu.png)
+![An in-situ run: the frame, the motors, the queue and the commands](img/overview-insitu.png)
 
 1. Mount the film. Check the **Data** folder and, for the detector
    position `mymar_in` uses, the **Integration** PONI. On the
