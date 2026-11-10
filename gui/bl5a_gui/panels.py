@@ -385,8 +385,11 @@ class IntegrationBox(qt.QGroupBox):
         path = path.strip()
         self.poni.setText(path)
         try:
-            with open(path) as f:
+            with open(items.required(path, "PONI", "choose a .poni file with Browse…")) as f:
                 text = f.read()
+        except Invalid as e:
+            qt.QMessageBox.warning(self, "Integration", str(e))
+            return
         except OSError as e:
             qt.QMessageBox.warning(self, "Integration", "PONI {!r}: {}".format(path, e))
             return

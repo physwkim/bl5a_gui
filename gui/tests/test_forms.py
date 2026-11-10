@@ -4,7 +4,7 @@ import unittest
 
 from silx.gui import qt
 
-from bl5a_gui import forms, items, sequences
+from bl5a_gui import editor, forms, items, sequences
 
 app = qt.QApplication.instance() or qt.QApplication([])
 
@@ -34,6 +34,17 @@ class ScanFormTest(unittest.TestCase):
         self.assertEqual(got, [f.item()])
         f.time.setText("0")
         self.assertRaises(items.Invalid, f.item)
+
+
+class BlockDialogTest(unittest.TestCase):
+    def test_an_empty_box_is_named_as_its_label(self):
+        for kind, box, message in (("wait", "seconds", "^Seconds is empty: type a number$"),
+                                   ("move", "moves", "^umv is empty: type motor position pairs"),
+                                   ("scan", "time", "^Count is empty: type a number$")):
+            d = editor.BlockDialog(dict(editor.NEW[kind]))
+            getattr(d, box).setText(" ")
+            with self.subTest(kind=kind), self.assertRaisesRegex(items.Invalid, message):
+                d.block()
 
 
 class InsituFormTest(unittest.TestCase):

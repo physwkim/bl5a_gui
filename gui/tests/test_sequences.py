@@ -25,9 +25,9 @@ class SequencesTest(unittest.TestCase):
         self.assertEqual(sequences.names(None, "kim"), ["Coin cell", "Thin film"])
         self.assertEqual(sequences.users(None), [])
         self.assertTrue(sequences.get(sequences.DEFAULT))
-        with self.assertRaisesRegex(Invalid, "Data folder: not set"):
+        with self.assertRaisesRegex(Invalid, "^Data folder is empty: choose one in the Data box"):
             sequences.save("mine", ERASE, None, "kim")
-        with self.assertRaisesRegex(Invalid, "Data folder: not set"):
+        with self.assertRaisesRegex(Invalid, "^Data folder is empty: choose one in the Data box"):
             sequences.get("mine", None, "kim")
 
     def test_save_get_delete(self):
@@ -62,7 +62,10 @@ class SequencesTest(unittest.TestCase):
             sequences.save("Thin film", ERASE, self.root, "kim")
         with self.assertRaisesRegex(Invalid, "is a template"):
             sequences.delete("Coin cell", self.root, "kim")
-        for name in ("", " ", ".hidden", "a/b", "a\\b", "a\nb", "x" * 65):
+        for name in ("", " ", None):
+            with self.subTest(name=name), self.assertRaisesRegex(Invalid, "^sequence is empty: type a name$"):
+                sequences.save(name, ERASE, self.root, "kim")
+        for name in (".hidden", "a/b", "a\\b", "a\nb", "x" * 65):
             with self.subTest(name=name), self.assertRaisesRegex(Invalid, "^sequence: 1 to 64 characters"):
                 sequences.save(name, ERASE, self.root, "kim")
         with self.assertRaisesRegex(Invalid, "^User: "):

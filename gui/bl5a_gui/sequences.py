@@ -27,8 +27,8 @@ NAME_MAX = 64
 
 def checked_name(text, field):
     """A user's or a sequence's name as one file name."""
-    text = (text or "").strip()
-    if not text or text.startswith(".") or len(text) > NAME_MAX \
+    text = items.required(text, field, "type a name").strip()
+    if text.startswith(".") or len(text) > NAME_MAX \
             or any(c in "/\\" or unicodedata.category(c).startswith("C") for c in text):
         raise Invalid("{}: 1 to {} characters, not starting with '.', without '/', '\\' or control "
                       "characters, got {!r}".format(field, NAME_MAX, text))
@@ -40,7 +40,8 @@ def folder(root, user):
     user (the panel's User box empty) is config.USER."""
     root = items.data_root(root)
     if root is None:
-        raise Invalid("Data folder: not set; a user's sequences are kept in <data folder>/{}".format(FOLDER))
+        raise Invalid(items.EMPTY.format("Data folder", "choose one in the Data box; a user's sequences are kept "
+                                         "in <data folder>/{}".format(FOLDER)))
     return pathlib.Path(root, FOLDER, checked_name((user or "").strip() or config.USER, "User"))
 
 

@@ -15,7 +15,7 @@ from silx.gui import qt
 from silx.gui.colors import Colormap
 from silx.gui.plot import Plot2D
 
-from . import mar
+from . import items, mar
 from .editor import dialog_dir
 from .plots import Loader
 
@@ -400,9 +400,7 @@ class CalibrationTab(qt.QWidget):
             return d_spacings(*CALIBRANTS[name])
         if name == CUBIC:
             return d_spacings(self.lattice.value(), "P")
-        path = self.dPath.text().strip()
-        if not path:
-            raise ValueError("no .D file")
+        path = items.required(self.dPath.text().strip(), D_FILE, "choose a pyFAI .D file with Browse…")
         with open(path) as f:
             return read_d(f.read())
 

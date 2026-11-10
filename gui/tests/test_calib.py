@@ -101,6 +101,11 @@ class CalibrationTabTest(TestCaseQt):
         self.tab.refineButton.click()
         return self.integrator.requests[-1]
 
+    def test_an_empty_d_file_box_says_to_choose_one(self):
+        self.tab.calibrant.setCurrentText(calib.D_FILE)
+        with self.assertRaisesRegex(ValueError, "^.D file is empty: choose a pyFAI .D file with Browse…$"):
+            self.tab.dspacings()
+
     def calibration(self, id, poni=REFINED, **body):
         body = dict({"id": id, "poni": poni, "chi2": 1e-9, "points": [[10, 20, 0], [30, 40, 1]],
                      "path": FRAME}, **body)
@@ -135,7 +140,7 @@ class CalibrationTabTest(TestCaseQt):
         self.tab.calibrant.setCurrentText(calib.D_FILE)
         self.tab.refineButton.click()
         self.assertEqual(self.integrator.requests, [])
-        self.assertIn("no .D file", self.tab.state.text())
+        self.assertIn(".D file is empty", self.tab.state.text())
 
     def test_a_result_is_taken_for_its_own_id_only(self):
         self.ready()
@@ -357,6 +362,15 @@ class ApplyTest(TestCaseQt):
         self.assertEqual(integrator.requests, [("set", {"poni": REFINED, "npt": 1500})])
         self.assertEqual(box.poni.text(), self.path)
         self.assertEqual(qt.QSettings(*config.SETTINGS).value("poni"), self.path)
+
+    def test_an_empty_poni_box_says_to_choose_a_file(self):
+        integrator = Integrator()
+        box = panels.IntegrationBox(integrator)
+        self.addCleanup(box.deleteLater)
+        with mock.patch.object(qt.QMessageBox, "warning") as warning:
+            box.applyFile(" ")
+        self.assertEqual(warning.call_args.args[1:], ("Integration", "PONI is empty: choose a .poni file with Browse…"))
+        self.assertEqual(integrator.requests, [])
 
     def test_the_window_applies_what_the_tab_saved(self):
         patch = mock.patch.multiple(bridge, **dict.fromkeys(("PVs", "Documents", "Commands", "QsPoller", "Integrator"),

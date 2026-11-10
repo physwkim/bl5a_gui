@@ -113,8 +113,8 @@ INDENT = "  "
 
 def parse_moves(text):
     """"tth 1 th 0" as [["tth", 1.0], ["th", 0.0]]."""
-    words = text.split()
-    if not words or len(words) % 2:
+    words = items.required(text, "umv", "type motor position pairs, as umv takes them: tth 1 th 0").split()
+    if len(words) % 2:
         raise Invalid("moves: motor position pairs, as umv takes them, got {!r}".format(text))
     return [[m, items.number(x, "moves: " + m)] for m, x in zip(words[::2], words[1::2])]
 
@@ -230,27 +230,27 @@ class BlockDialog(qt.QDialog):
         b = {"kind": self.kind}
         if self.kind == "scan":
             t = self.type.currentText()
-            b.update(type=t, motor=self.motor.currentText(), start=_num(self.start, "start"),
-                     finish=_num(self.finish, "finish"))
+            b.update(type=t, motor=self.motor.currentText(), start=_num(self.start, "Start"),
+                     finish=_num(self.finish, "Finish"))
             if self.per.currentText() == "monitor":
-                b["monitor"] = _num(self.time, "monitor")
+                b["monitor"] = _num(self.time, "Count")
             else:
-                b["time"] = _num(self.time, "time")
+                b["time"] = _num(self.time, "Count")
             if items.SCAN_TYPES[t]:
-                b["sleep"] = _num(self.sleep, "sleep")
+                b["sleep"] = _num(self.sleep, "Sleep")
             else:
-                b.update(intervals=self.intervals.value(), settle=_num(self.settle, "settle"))
+                b.update(intervals=self.intervals.value(), settle=_num(self.settle, "Settle"))
             b.update(counter=self.counter.currentText(), pick=self.pick.currentText())
             if self.dip.isEnabled() and self.dip.isChecked():
                 b["dip"] = True
             if self.set.text().strip():
-                b["set"] = _num(self.set, "set")
+                b["set"] = _num(self.set, "Set to")
         elif self.kind == "move":
             b["moves"] = parse_moves(self.moves.text())
         elif self.kind == "spec":
             b["command"] = self.command.text().strip()
         elif self.kind == "wait":
-            b["seconds"] = _num(self.seconds, "seconds")
+            b["seconds"] = _num(self.seconds, "Seconds")
         elif self.kind == "loop":
             b.update(times=self.times.value(), blocks=self.inner)
         when = parse_when(self.when.text())

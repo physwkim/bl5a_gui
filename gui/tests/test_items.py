@@ -22,6 +22,29 @@ class FileNameTest(unittest.TestCase):
             with self.assertRaises(Invalid, msg=repr(bad)):
                 items.file_name(bad)
 
+    def test_an_empty_box_says_what_to_put_in_it(self):
+        for call, message in (
+                (lambda: items.mar_series(" ", 2), "File name is empty: type the mar345 file name"),
+                (lambda: items.mar_series("f", ""), "Texpo is empty: type seconds, or negative monitor counts"),
+                (lambda: items.mar_series("f", 2, n=3, ti=""), "Ti is empty: type the minutes"),
+                (lambda: items.mar_series("f", 2, filters=""), "Filters is empty: type the four blades"),
+                (lambda: items.step_scan("th", "", 1, 10, 1), "Start is empty: type a number"),
+                (lambda: items.step_scan("th", 0, None, 10, 1), "Finish is empty: type a number"),
+                (lambda: items.step_scan("th", 0, 1, 10, ""), "Time is empty: type the seconds"),
+                (lambda: items.insitu_items([{"align": False}], "s"), "row 1: name is empty: type the mar345"),
+                (lambda: items.insitu_items([{"align": False, "name": "f", "texpo": ""}], "s"),
+                 "row 1: texpo is empty: type seconds"),
+                (lambda: items.insitu_items([{"align": False, "name": ""}]), "Series is empty: type the folder"),
+                (lambda: items.block("block", {"kind": "spec", "command": " "}),
+                 r"block \(spec\): command is empty: type one SPEC command line")):
+            with self.subTest(message=message), self.assertRaisesRegex(Invalid, "^" + message):
+                call()
+        # Filled in but wrong: the rule, as before.
+        with self.assertRaisesRegex(Invalid, "^File name: 1 to 27 characters"):
+            items.mar_series("a b", 2)
+        with self.assertRaisesRegex(Invalid, "^Start: not a number: 'x'"):
+            items.step_scan("th", "x", 1, 10, 1)
+
     def test_bytes_not_characters(self):
         # qs counts bytes (Rust str::len).
         items.file_name("é" * 13)
@@ -43,7 +66,7 @@ class MarSeriesTest(unittest.TestCase):
         self.assertEqual(items.describe(items.mar_series("f", 2, filters="1,1,0,0"))[2],
                          "n=1 texpo=2 mode=static filters=1/1/0/0")
         for bad in ("0 1 0", "0 1 0 0 0", "0 2 0 0", "a b c d", "", [True, 0, 0, 0], [0.5, 0, 0, 0]):
-            with self.subTest(filters=bad), self.assertRaisesRegex(Invalid, "^Filters: "):
+            with self.subTest(filters=bad), self.assertRaisesRegex(Invalid, "^Filters(:| is empty:) "):
                 items.mar_series("f", 2, filters=bad)
 
     def test_repeat(self):
@@ -149,7 +172,7 @@ class InsituTableTest(unittest.TestCase):
         rows = [{"align": False, "th_list": [], "T": 30, "name": ""}, {"name": "f2"}]
         self.assertEqual([i["kwargs"]["md"] for i in items.insitu_items(rows, None, SEQ)], [{"series": "f2"}] * 2)
         self.assertEqual(items.insitu_items(rows, " s ", SEQ)[0]["kwargs"]["md"], {"series": "s"})
-        with self.assertRaisesRegex(Invalid, "no row has a name"):
+        with self.assertRaisesRegex(Invalid, "^Series is empty: type the folder the frames go to, or a name"):
             items.insitu_items([{"align": False, "th_list": [], "T": 30}])
         with self.assertRaisesRegex(Invalid, "no rows"):
             items.insitu_items([], "s")
@@ -208,7 +231,7 @@ class BlockTest(unittest.TestCase):
             ({"kind": "move", "moves": [["th", 1], ["th", 2]]}, "th twice"),
             ({"kind": "move", "moves": [["th"]]}, "[motor, position]"),
             ({"kind": "spec", "command": "a\nb"}, "one line"),
-            ({"kind": "spec", "command": "  "}, "one line"),
+            ({"kind": "spec", "command": "  "}, "command is empty: type one SPEC command line"),
             ({"kind": "wait", "seconds": 0}, "seconds > 0"),
             ({"kind": "erase", "when": {"motor": "th", "op": "=", "value": 1}}, "op must be"),
             ({"kind": "erase", "when": {"motor": "th", "op": "<"}}, "when: value is missing"),

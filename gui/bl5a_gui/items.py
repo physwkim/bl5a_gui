@@ -35,10 +35,27 @@ def plan_item(plan, /, **kwargs):
     return {"item_type": "plan", "name": plan, "args": [], "kwargs": kwargs}
 
 
+# A box left empty: its name, then what to put in it.
+EMPTY = "{} is empty: {}"
+
+
+def _blank(v):
+    return v is None or (isinstance(v, str) and not v.strip())
+
+
+def required(v, field, what):
+    """`v`; Invalid saying `what` to put in the box `field` when it is
+    blank."""
+    if _blank(v):
+        raise Invalid(EMPTY.format(field, what))
+    return v
+
+
 def file_name(name, field="name"):
     """mar345expose's file name: 1 to 27 bytes, no whitespace or quotes
     (qs file_name; the macros' "less than 28 characters, no 'space'")."""
-    if not isinstance(name, str) or not name or len(name.encode()) >= 28 \
+    required(name, field, "type the mar345 file name, up to 27 characters without spaces or quotes")
+    if not isinstance(name, str) or len(name.encode()) >= 28 \
             or any(c.isspace() or c in "\"'" for c in name):
         raise Invalid("{}: 1 to 27 characters without spaces or quotes, got {!r}".format(field, name))
     return name
@@ -46,13 +63,14 @@ def file_name(name, field="name"):
 
 def exposure(texpo, field="texpo"):
     """Seconds (> 0) or monitor counts (< 0), as qs's exposure."""
-    texpo = number(texpo, field)
+    texpo = number(texpo, field, "type seconds, or negative monitor counts")
     if texpo == 0.0:
         raise Invalid("{}: seconds (> 0) or monitor counts (< 0), got 0".format(field))
     return texpo
 
 
-def number(v, field):
+def number(v, field, what="type a number"):
+    required(v, field, what)
     try:
         v = float(v)
     except (TypeError, ValueError):
@@ -134,7 +152,10 @@ def folder(item):
 
 def blades(v, field):
     """`fi`'s four PFCU0 blades, 0 or 1 each, from "0 1 0 0" or a list."""
-    values = numbers(v, field) if isinstance(v, str) else list(v)
+    if isinstance(v, str):
+        values = numbers(required(v, field, "type the four blades, 0 or 1 each: 0 1 0 0"), field)
+    else:
+        values = list(v)
     if len(values) != 4 or any(isinstance(x, bool) or x not in (0, 1) for x in values):
         raise Invalid("{}: four blades, 0 or 1 each, got {!r}".format(field, v))
     return [int(x) for x in values]
@@ -142,7 +163,7 @@ def blades(v, field):
 
 def mar_series(name, texpo, mode="static", filters=FILTERS, n=1, ti=None, series=None):
     """mymar1 (n = 1, ti None) or mymar (n frames, one every ti minutes)."""
-    kwargs = {"name": file_name(name, "filename")}
+    kwargs = {"name": file_name(name, "File name")}
     texpo = exposure(texpo, "Texpo")
     if texpo > 0 and not 1.0 <= texpo <= 20.0:
         # mymar: "Exposure Time in [sec]: 1 ~ 20".
@@ -154,7 +175,7 @@ def mar_series(name, texpo, mode="static", filters=FILTERS, n=1, ti=None, series
     kwargs["filters"] = blades(filters, "Filters")
     kwargs["n"] = n = count(n, "N")
     if ti is not None:
-        ti = number(ti, "Ti")
+        ti = number(ti, "Ti", "type the minutes from one frame's start to the next, more than 2.5")
         if not ti > 2.5:
             # mymar: "Time inteval in min > 2.5".
             raise Invalid("Ti: minutes, more than 2.5, got {:g}".format(ti))
@@ -222,10 +243,6 @@ NEW_ROW = {"T": None, "ramp": None, "wait": False, "soak_n": None, "soak_t": Non
            "align": True, "th_list": TH_LIST, "texpo": IN_TEXPO, "name": ""}
 
 
-def _blank(v):
-    return v is None or (isinstance(v, str) and not v.strip())
-
-
 def insitu_row(row, series, sequence=None):
     """One in-situ table row as its insitu_step item, running `sequence`
     ((name, blocks)) when its align is on. A key left out takes NEW_ROW's
@@ -269,7 +286,7 @@ def insitu_items(rows, series=None, sequence=None):
     if not series:
         series = next((n for n in (str(r.get("name") or "").strip() for r in rows) if n), "")
         if not series:
-            raise Invalid("Series: empty, and no row has a name to take it from")
+            raise Invalid(EMPTY.format("Series", "type the folder the frames go to, or a name in a row"))
     out = []
     for k, row in enumerate(rows, 1):
         try:
@@ -420,7 +437,9 @@ def block(at, b):
         _moves(f)
     elif kind == "spec":
         line = f.text("command").strip()
-        if not line or "\n" in line or "\r" in line:
+        if not line:
+            raise f.err(EMPTY.format("command", "type one SPEC command line"))
+        if "\n" in line or "\r" in line:
             raise f.err("command must be one line, got {!r}".format(line))
     elif kind == "wait":
         f.num("seconds", lambda s: s > 0, "seconds > 0")
@@ -469,10 +488,10 @@ def step_scan(motor, start, finish, intervals, time, relative=False, counter="de
         raise Invalid("motor: one of {}, got {!r}".format(", ".join(config.MOTORS), motor))
     if counter not in COUNTERS:
         raise Invalid("counter: one of {}, got {!r}".format(", ".join(COUNTERS), counter))
-    time = number(time, "time")
+    time = number(time, "Time", "type the seconds counted at each point")
     if time <= 0:
-        raise Invalid("time: seconds per point, positive, got {:g}".format(time))
-    kwargs = {"motor": motor, "start": number(start, "start"), "finish": number(finish, "finish"),
+        raise Invalid("Time: seconds per point, positive, got {:g}".format(time))
+    kwargs = {"motor": motor, "start": number(start, "Start"), "finish": number(finish, "Finish"),
               "intervals": count(intervals, "intervals"), "time": time, "relative": bool(relative),
               "counter": counter}
     md = series_md(series)
