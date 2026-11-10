@@ -74,6 +74,24 @@ class LayoutTest(unittest.TestCase):
         for key, (_, label) in w.status.labels.items():
             self.assertGreaterEqual(label.width(), label.sizeHint().width(), key)
 
+    def test_queued_items_leave_the_queue_whole_at_the_gui_font(self):
+        font = self.app.font()
+        self.addCleanup(self.app.setFont, font)
+        self.app.setFont(qt.QFont(config.FONT, config.FONT_PT))
+        w = self.window()
+        area = w.centralWidget()
+        item = {"item_uid": "a", "name": "insitu_row",
+                "kwargs": {"sequence": "Thin film", "T": 300.0, "ramp": 10.0, "n": 10, "texpo": 60.0,
+                           "filters": [0, 1, 0, 0], "name": "LiNiO2_cycle1_insitu"}}
+        w.queueView.setQueue({"name": "mar_series", "kwargs": {"name": "r"}},
+                             [item] + [dict(item, item_uid=str(i)) for i in range(11)])
+        w.resize(w.width() + 1, w.height())  # the scroll area lays its widget out again
+        self.app.processEvents()
+        self.assertGreaterEqual(area.viewport().width(), w.queueView.minimumSizeHint().width())
+        self.assertEqual(area.horizontalScrollBar().maximum(), 0)
+        clear = w.queueView.clearBtn
+        self.assertLessEqual(clear.mapTo(area.viewport(), qt.QPoint(clear.width(), 0)).x(), area.viewport().width())
+
     def test_the_motors_are_over_the_queue_with_every_row_at_the_gui_font(self):
         font = self.app.font()
         self.addCleanup(self.app.setFont, font)

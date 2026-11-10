@@ -27,6 +27,10 @@ class QueueTable(QueueView):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.table.setHorizontalHeaderLabels(self.HEADERS)
+        # The window is laid out for the bare title: the item count it gains
+        # may be cut off, but must not widen the queue and push Clear out of
+        # the pane. The status line's QS counts the queue too.
+        self.caption.setMinimumWidth(self.caption.sizeHint().width())
 
     @classmethod
     def _describe(cls, item):
