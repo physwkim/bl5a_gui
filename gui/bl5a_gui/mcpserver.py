@@ -60,6 +60,8 @@ QS_KEYS = ("manager_state", "re_state", "worker_environment_exists", "items_in_q
            "queue_autostart_enabled", "plans_run", "plans_failed")
 SCANS = 50  # finished and running scans kept
 ALIGNED = 200  # alignment history rows kept
+# A stage's fields that say where it moved its scan's motor.
+WENT = ("pick", "dip", "before", "target", "after", "set")
 TWEAK_TIMEOUT = 300.0  # s, for one TWF/TWR move to complete
 CONNECT_TIMEOUT = 2.0  # s, for a PV to connect before a put to it
 MSTA_PROBLEM = 0x200  # motor record MSTA: the driver refused the request
@@ -401,7 +403,8 @@ class Beamline:
         return next((k for k, s in self.scans if s is scan), None)
 
     def _stage(self, run, stage, scan):
-        self.stages["rows"].append(dict(stage, scan=self.scan_id(scan) if scan is not None else None))
+        if run.plan in docs.ALIGNING:
+            self.stages["rows"].append(dict(stage, scan=self.scan_id(scan) if scan is not None else None))
 
     def _exposure(self, run, exposure):
         self.last_frame = exposure.get("file")
@@ -694,12 +697,15 @@ SEQUENCE = Field(description="An alignment sequence: \"Coin cell\" (coin_align's
                              "(align_in.mac's) or one the user saved")
 USER = Field(description="Whose saved sequences, kept in <data folder>/alignments/<user>; null: the GUI's "
                          "Alignment user")
-BLOCKS = """Each block is an object with "kind": "scan" {type: ascan|lup|cscan|clup, motor, start, finish,
-time (s per point for ascan/lup, of the whole move for cscan/clup) or, for ascan/lup only, monitor (counts
-per point, instead of time), intervals and settle (s) for ascan/lup,
+# A scan's fields, an alignment scan block's and a queued scan's.
+SCAN = """{type: ascan|lup|cscan|clup (lup/clup: start and finish are offsets from where the motor is),
+motor, start, finish, time (s per point for ascan/lup, of the whole move for cscan/clup) or, for ascan/lup
+only, monitor (counts per point, instead of time), intervals and settle (s) for ascan/lup,
 sleep (s) for cscan/clup, counter: det|ic1|icxrd, pick: CEN|COM|xMAX|EDGE (where the motor goes), dip
 (optional, true: CEN/COM/xMAX of a dip, of the scan turned over; not with EDGE), set (optional: set the motor
-to this there)}; "move" {moves: [[motor, position], ...], moved together};
+to this there)}"""
+BLOCKS = """Each block is an object with "kind": "scan" """ + SCAN + """; "move" {moves: [[motor, position], ...],
+moved together};
 "spec" {command: one SPEC line}; "wait" {seconds}; "erase" {} (the mar345 plate); "loop" {times, blocks:
 [...]} (its blocks in order, times over; they may be loops too). Any block may carry "when" {motor, op:
 "<"|">", value} (run only then; a loop's, once before it starts) and "note".
@@ -809,16 +815,21 @@ def build(bl):
     @tool(read_only=True)
     def scans(last: Annotated[int, Field(ge=1, le=SCANS)] = 10):
         """The last scans (ascan, lup, cscan, clup), oldest first: id (for
-        `scan`), title, points, how it ended (empty while it runs) and the
-        peak statistics SPEC's macros read (xpk, ymax, com, cen, fwhm)."""
+        `scan`), title, points, how it ended (empty while it runs), the
+        peak statistics SPEC's macros read (xpk, ymax, com, cen, fwhm) and,
+        when the scan's motor was moved by what it found (an alignment's
+        stage or a scan item's pick), where to: pick, dip, before, target,
+        after, set."""
         with bl.lock:
-            picked = [(k, s, list(s.x), list(s.y)) for k, s in list(bl.scans)[-last:]]
+            picked = [(k, s, list(s.x), list(s.y), s.stage) for k, s in list(bl.scans)[-last:]]
         rows = []
-        for k, s, x, y in picked:
+        for k, s, x, y, stage in picked:
             st = peak.stats(x, y)
+            went = None if stage is None else rounded({f: stage.get(f) for f in WENT})
             rows.append({"id": k, "title": s.title, "motor": s.motor, "det": s.det, "points": len(x),
                          "exit": docs.outcome(s.exit_status, s.reason) or "running",
-                         "stats": None if st is None else {f: sig(v) for f, v in st._asdict().items()}})
+                         "stats": None if st is None else {f: sig(v) for f, v in st._asdict().items()},
+                         "went": went})
         return out(rows)
 
     @tool(read_only=True)
@@ -982,23 +993,17 @@ def build(bl):
         return out(bl.add([items.align(blocks, sequence, series)], data_folder))
 
     @tool()
-    def queue_scan(motor: Literal[config.MOTORS],
-                   start: Annotated[float, Field(description="first point; an offset when relative")],
-                   finish: Annotated[float, Field(description="last point; an offset when relative")],
-                   intervals: Annotated[int, Field(ge=1, description="steps; the scan takes intervals + 1 "
-                                                                     "points")],
-                   time: Annotated[float, Field(gt=0, description="seconds counted at each point")],
-                   relative: Annotated[bool, Field(description="lup: offsets from where the motor is, and "
-                                                               "back there after; false: ascan")] = True,
-                   counter: Literal[items.COUNTERS] = "det",
+    def queue_scan(scan: Annotated[dict, Field(description="An alignment scan block's fields without kind, "
+                                                           "pick optional: without one the motor stays where "
+                                                           "the scan leaves it (an ascan/cscan at finish, a "
+                                                           "lup/clup back where it was). " + SCAN)],
                    series: Annotated[str | None, SERIES] = None,
                    data_folder: Annotated[str | None, DATA_FOLDER] = None):
-        """Queue one step scan: lup (relative) or ascan of a motor, counting
-        at each point. The GUI's Scan form; it draws in the Scan tab and goes
-        to the series' SPEC file."""
-        item = items.step_scan(motor, start, finish, intervals, time, relative=relative, counter=counter,
-                               series=series)
-        return out(bl.add([item], data_folder))
+        """Queue one scan of a motor, then, given a pick, the motor to the
+        scan's CEN, COM, xMAX or EDGE, as SPEC's `umv th CEN` after it. The
+        GUI's Scan form; it draws in the Scan tab and goes to the series'
+        SPEC file."""
+        return out(bl.add([items.scan(scan, series)], data_folder))
 
     @tool()
     def queue_mar_series(name: Annotated[str, Field(description="mar345 file name: 1-27 characters, no spaces "

@@ -3,7 +3,7 @@ queues one. No Qt.
 
 bl5a-qs accepts any item into its queue and checks the arguments only when
 the item runs, so a bad item fails mid-queue; the forms check here first.
-Each check is qs's own rule (qs/src/plans/{mod,mar,blocks,step_scan}.rs) or, where
+Each check is qs's own rule (qs/src/plans/{mod,mar,blocks,scan}.rs) or, where
 noted, the macro's stricter one (mymar's header: Ti > 2.5 min, Texpo 1–20
 s)."""
 
@@ -379,6 +379,17 @@ def _scan(f):
         f.num("intervals", lambda n: n >= 1 and n == int(n), "a whole number >= 1")
         f.num("settle", lambda s: s >= 0, "seconds >= 0")
     f.one_of("counter", COUNTERS)
+
+
+def _then(f):
+    """`pick` (of a dip given `dip`) and `set`; False without a pick, which
+    leaves the motor where its scan did."""
+    if f.take("pick") is None:
+        for key in ("dip", "set"):
+            v = f.take(key)
+            if v is not None and v is not False:  # `set` 0 is not False here, as in qs
+                raise f.err("{} is for a pick, and pick is missing".format(key))
+        return False
     pick = f.one_of("pick", PICKS)
     dip = f.take("dip")
     if dip is not None and not isinstance(dip, bool):
@@ -388,6 +399,30 @@ def _scan(f):
     if f.block.get("set") is not None:
         f.num("set")
     f.take("set")
+    return True
+
+
+def _g(x):
+    return "{:g}".format(x)
+
+
+def scan_line(b):
+    """A scan as the Stages table names it, SPEC's argument order, then
+    where its motor goes after."""
+    if SCAN_TYPES[b["type"]]:
+        how = "{} {}".format(_g(b["time"]), _g(b["sleep"]))
+    else:
+        # SPEC's count time: monitor counts as their negative.
+        how = "{} {}".format(b["intervals"], _g(-b["monitor"] if b.get("monitor") is not None else b["time"]))
+    line = "{} {} {} {} {}  {}".format(b["type"], b["motor"], _g(b["start"]), _g(b["finish"]), how, b["counter"])
+    if b.get("pick") is None:
+        return line
+    line += " → " + b["pick"]
+    if b.get("dip"):
+        line += " dip"
+    if b.get("set") is not None:
+        line += ", set {}".format(_g(b["set"]))
+    return line
 
 
 def _moves(f):
@@ -433,6 +468,8 @@ def block(at, b):
     _when(f)
     if kind == "scan":
         _scan(f)
+        if not _then(f):
+            raise f.err("pick is missing")
     elif kind == "move":
         _moves(f)
     elif kind == "spec":
@@ -481,23 +518,18 @@ def align(value, sequence=None, series=None):
     return plan_item("align", **kwargs)
 
 
-def step_scan(motor, start, finish, intervals, time, relative=False, counter="det", series=None):
-    """One ascan (lup when relative) of `motor`, counting `time` s at each
-    of intervals + 1 points (qs plans/step_scan.rs)."""
-    if motor not in config.MOTORS:
-        raise Invalid("motor: one of {}, got {!r}".format(", ".join(config.MOTORS), motor))
-    if counter not in COUNTERS:
-        raise Invalid("counter: one of {}, got {!r}".format(", ".join(COUNTERS), counter))
-    time = number(time, "Time", "type the seconds counted at each point")
-    if time <= 0:
-        raise Invalid("Time: seconds per point, positive, got {:g}".format(time))
-    kwargs = {"motor": motor, "start": number(start, "Start"), "finish": number(finish, "Finish"),
-              "intervals": count(intervals, "intervals"), "time": time, "relative": bool(relative),
-              "counter": counter}
+def scan(fields, series=None):
+    """A `scan` item: one scan, an alignment scan block's `fields` without
+    its kind, the pick optional (qs plans/scan.rs)."""
+    f = _Fields("scan", fields)
+    _scan(f)
+    _then(f)
+    f.done()
+    kwargs = dict(fields)
     md = series_md(series)
     if md:
         kwargs["md"] = md
-    return plan_item("step_scan", **kwargs)
+    return plan_item("scan", **kwargs)
 
 
 def describe(item):
@@ -508,8 +540,12 @@ def describe(item):
     shown = []
     if "blocks" in kw and "sequence" not in kw:
         shown.append("blocks={}".format(len(kw["blocks"]) if isinstance(kw["blocks"], list) else "?"))
-    for k in ("sequence", "T", "ramp", "wait", "tolerance", "soak", "n", "ti", "texpo", "mode", "filters", "th_list",
-              "motor", "start", "finish", "intervals", "time", "relative", "counter"):
+    if plan == "scan":
+        try:
+            shown.append(scan_line(kw))
+        except (KeyError, TypeError, ValueError):
+            shown.append("?")
+    for k in ("sequence", "T", "ramp", "wait", "tolerance", "soak", "n", "ti", "texpo", "mode", "filters", "th_list"):
         if k in kw:
             v = kw[k]
             if k == "sequence":

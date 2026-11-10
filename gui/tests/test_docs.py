@@ -95,6 +95,7 @@ class Alignment(Recorded):
         self.assertTrue(self.r.stages)
         self.assertEqual([s for _, s, _ in self.r.stages], self.r.raw("stages"))
         self.assertEqual(len(self.r.stages), len(self.r.scans))
+        self.assertTrue(all(scan.stage is stage for _, stage, scan in self.r.stages))
 
     def test_stage_statistics_from_the_rebuilt_scan(self):
         for _, stage, scan in self.r.stages:
@@ -176,6 +177,50 @@ class FailedRunTest(unittest.TestCase):
         run, row = r.plan_run("align")
         self.assertEqual((run.reason, row["reason"]), ("", ""))
         self.assertEqual(docs.outcome(run.exit_status, run.reason), "success")
+
+
+def scan_item(feed, pick):
+    """A `scan` item's documents: its run around one lup of th, and with a
+    pick the stage that moved th to the lup's CEN."""
+    feed("start", {"uid": "p", "plan_name": "scan", "series": "s", "time": 1.0})
+    feed("descriptor", {"uid": "pd", "name": "stages", "run_start": "p"})
+    feed("start", {"uid": "s", "plan_name": "lup", "motors": ["th"], "det": "det",
+                   "plan_args": {"start": -0.1, "finish": 0.1, "intervals": 2, "time": 1.0}})
+    feed("descriptor", {"uid": "sd", "name": "primary", "run_start": "s"})
+    for x, y in ((-0.1, 1.0), (0.0, 5.0), (0.1, 1.0)):
+        feed("event", {"descriptor": "sd", "data": {"th": x, "det": y}})
+    feed("stop", {"run_start": "s", "exit_status": "success"})
+    if pick:
+        feed("event", {"descriptor": "pd", "data": {"stage": "lup th -0.1 0.1 2 1", "motor": "th", "pick": "CEN",
+                                                    "dip": False, "before": 0.0, "target": 0.0, "after": 0.0}})
+    feed("stop", {"run_start": "p", "exit_status": "success"})
+
+
+class ScanItemTest(unittest.TestCase):
+    """A scan item's stage is its scan's, not an alignment's: no history
+    row."""
+
+    def run_item(self, pick):
+        stages, scans, stops = [], [], []
+        d = docs.Documents(on_stage=lambda run, stage, scan: stages.append((run, stage, scan)),
+                           on_scan_stop=scans.append, on_run_stop=lambda run, row: stops.append((run, row)))
+        scan_item(d.feed, pick)
+        return stages, scans, stops
+
+    def test_a_pick_is_the_scans_stage_and_no_alignment(self):
+        stages, (scan,), ((run, row),) = self.run_item(pick=True)
+        ((r, stage, s),) = stages
+        self.assertIs(r, run)
+        self.assertIs(s, scan)
+        self.assertIs(scan.stage, stage)
+        self.assertEqual(stage["pick"], "CEN")
+        self.assertIsNone(row)
+
+    def test_no_pick_no_stage(self):
+        stages, (scan,), ((_, row),) = self.run_item(pick=False)
+        self.assertEqual(stages, [])
+        self.assertIsNone(scan.stage)
+        self.assertIsNone(row)
 
 
 class TitleTest(unittest.TestCase):

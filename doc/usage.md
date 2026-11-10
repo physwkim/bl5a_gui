@@ -251,7 +251,7 @@ rest wait in order.
 | Column | Shows |
 | --- | --- |
 | # | the place in the queue |
-| Plan | `mar_series`, `align`, `insitu_step` or `step_scan` |
+| Plan | `mar_series`, `align`, `insitu_step` or `scan` |
 | Name | the frame file name, when the plan takes frames |
 | Parameters | the item's arguments, for example `sequence='Thin film' T=30 ramp=10 wait=True tolerance=0.5 soak=5/1 texpo=-70000 th_list=-0.05/0.11/0.13/0.15` |
 | Folder | where the item's data goes: `<data root>/<series>`, or the series alone when the item goes to bl5a-qs's `--data-root` |
@@ -577,12 +577,20 @@ the SPEC-format file of its item's data folder, `<series>.spec` (see
 PyMCA. The toolbar is silx's: zoom, pan, log axes, grid, save, print.
 
 The **Scan** form, on the left beside Battery and In-situ, queues one
-step scan as a `step_scan` item: a `lup` (start and finish are offsets
-from where the motor is, and it goes back there after) or an `ascan`
-(positions; the motor stays at finish), intervals + 1 points each
-counted Time seconds, with the statistics of the chosen Counter. It
-moves the motor to no target. It is drawn here and goes to its series'
-`.spec` file like an alignment's scans. The form has no cscan or clup.
+scan as a `scan` item. Its boxes are an alignment scan block's (see
+[The Blocks window](#the-blocks-window)): Type `ascan` or `cscan`
+(positions; the motor stays at finish) or `lup` or `clup` (offsets from
+where the motor is, and it goes back there after), a step scan's
+intervals, count and settle, a fly scan's sweep time and sleep, and the
+Counter whose statistics are taken. **Go to** `none` leaves the motor
+where the scan left it; CEN, COM, xMAX or EDGE then moves it there, as
+an alignment stage does, after the same
+[outlier filter](#before-a-stage-moves), with **of a dip** and
+**Set to** as in a block. The scan is drawn here, its target marked,
+and goes to its series' `.spec` file like an alignment's scans; with no
+Series it goes to the data folder `scan`. A scan item's move is not an
+alignment stage: it is not in the Stages table or the alignment
+history.
 
 ## In-situ (film against temperature)
 
@@ -828,7 +836,7 @@ scan find?".
 | `status` | the queue's and SPEC's state, and `allowed`: the actions open now | status line; which buttons are live |
 | `queue`, `history` | the waiting items; the finished ones with their exit status | Queue |
 | `motors` | position, step and unit of each motor | Motors |
-| `scans`, `scan`, `alignment` | the scans with their peak values; the stages and the alignment history | Alignment tab |
+| `scans`, `scan`, `alignment` | the scans with their peak values and where each moved its motor; the stages and the alignment history | Alignment tab |
 | `messages`, `spec_log`, `commands` | the three logs | Messages, SPEC, Commands |
 | `frame_image` | the last frame, or a named one, as a picture | Image tab |
 | `integration`, `stacks`, `stack` | the integrator's PONI and npt; the stacks; one stack's rows | Integration, Stack tab |

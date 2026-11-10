@@ -40,7 +40,7 @@ in the GUI.
 | Path | What it is |
 | --- | --- |
 | `sim/` | `bl5a-sim`: a SPEC server and a mar345dtb over one simulated beamline |
-| `qs/` | `bl5a-qs`: the bsrs queue server with the plans `align` (a block sequence), `mar_series`, `insitu_step`, `step_scan` |
+| `qs/` | `bl5a-qs`: the bsrs queue server with the plans `align` (a block sequence), `mar_series`, `insitu_step`, `scan` (one scan, an alignment scan block's fields) |
 | `integrator/` | `bl5a-integrator`: integrates each frame, keeps one HDF5 stack per series and q axis in the series' data folder |
 | `drivers/spec/` | the SPEC server protocol (`protocol/`, shared with bl5a-sim) and the SPEC client asyn driver (`driver/`) |
 | `iocs/spec-ioc/` | `spec-ioc`: SPEC's motors, counters and command line as EPICS records |

@@ -4,7 +4,8 @@
 //! - `scan`: an alignment scan (`type` ascan, lup, cscan or clup; an
 //!   ascan or lup counts each point for `time` seconds or to `monitor`
 //!   counts), then the motor to the scan's `pick` (CEN, COM, xMAX, EDGE), of its dip given
-//!   `dip` true (not EDGE), and, given `set`, `set motor <set>`;
+//!   `dip` true (not EDGE), and, given `set`, `set motor <set>`; a `scan`
+//!   item ([`super::scan`]) is one of these, its pick optional;
 //! - `move`: `umv`, the `moves` ([motor, position] pairs) together;
 //! - `spec`: a SPEC command line;
 //! - `wait`: `seconds`;
@@ -39,7 +40,7 @@ pub(super) struct Block {
 
 #[derive(Debug, PartialEq)]
 enum Action {
-    Scan(ScanBlock),
+    Scan(ScanDef, Then),
     Move(Vec<(&'static str, f64)>),
     Spec(String),
     Wait(f64),
@@ -47,14 +48,20 @@ enum Action {
     Loop { times: usize, blocks: Vec<Block> },
 }
 
+/// A scan's own fields, an alignment block's and a `scan` item's alike.
 #[derive(Debug, PartialEq)]
-struct ScanBlock {
-    motor: &'static str,
+pub(super) struct ScanDef {
+    pub(super) motor: &'static str,
     start: f64,
     finish: f64,
     relative: bool,
     motion: Motion,
-    counter: &'static str,
+    pub(super) counter: &'static str,
+}
+
+/// Where the motor goes after its scan, and the `set` there.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(super) struct Then {
     pick: Pick,
     set: Option<f64>,
 }
@@ -76,7 +83,7 @@ impl When {
     }
 }
 
-impl ScanBlock {
+impl ScanDef {
     fn scan(&self, ops: &Ops<'_>) -> Scan {
         Scan {
             axis: ops.dev.axis(self.motor),
@@ -98,6 +105,14 @@ struct Fields<'a> {
 }
 
 impl<'a> Fields<'a> {
+    fn new(at: String, map: &'a Map<String, Value>) -> Self {
+        Self {
+            at,
+            map,
+            taken: Vec::new(),
+        }
+    }
+
     fn err(&self, what: impl std::fmt::Display) -> String {
         format!("{}: {what}", self.at)
     }
@@ -199,7 +214,8 @@ pub(super) fn counters() -> Vec<&'static str> {
     CHANNELS.into_iter().filter(|c| *c != "sec").collect()
 }
 
-fn scan(f: &mut Fields<'_>) -> Result<ScanBlock, String> {
+/// A scan's own fields: its type, motor, range, count and counter.
+fn scan_def(f: &mut Fields<'_>) -> Result<ScanDef, String> {
     let names = TYPES.map(|t| t.0);
     let ty = f.one_of("type", &names)?;
     let &(_, relative, fly) = TYPES.iter().find(|t| t.0 == ty).expect("one of TYPES");
@@ -244,6 +260,27 @@ fn scan(f: &mut Fields<'_>) -> Result<ScanBlock, String> {
         }
     };
     let counter = f.one_of("counter", &counters())?;
+    Ok(ScanDef {
+        motor,
+        start,
+        finish,
+        relative,
+        motion,
+        counter,
+    })
+}
+
+/// `pick` (of a dip given `dip`) and `set`; `None` without a pick, which
+/// leaves the motor where its scan did.
+fn then(f: &mut Fields<'_>) -> Result<Option<Then>, String> {
+    if f.take("pick").is_none() {
+        for key in ["dip", "set"] {
+            if f.take(key).is_some_and(|v| v != &Value::Bool(false)) {
+                return Err(f.err(format!("{key} is for a pick, and pick is missing")));
+            }
+        }
+        return Ok(None);
+    }
     let pick = f.one_of("pick", &PICKS.map(|p| p.0))?;
     let stat = PICKS.iter().find(|p| p.0 == pick).expect("one of PICKS").1;
     let pick = match (stat, f.flag("dip")?) {
@@ -252,16 +289,35 @@ fn scan(f: &mut Fields<'_>) -> Result<ScanBlock, String> {
         (None, false) => Pick::Edge,
         (None, true) => return Err(f.err("dip is for CEN, COM and xMAX, not EDGE")),
     };
-    Ok(ScanBlock {
-        motor,
-        start,
-        finish,
-        relative,
-        motion,
-        counter,
+    Ok(Some(Then {
         pick,
         set: f.num_opt("set")?,
-    })
+    }))
+}
+
+/// A `scan` item's fields, `plan` naming it in errors: a scan block's,
+/// the pick optional.
+pub(super) fn scan_item(
+    plan: &str,
+    map: &Map<String, Value>,
+) -> Result<(ScanDef, Option<Then>), String> {
+    let mut f = Fields::new(plan.to_string(), map);
+    let scan = scan_def(&mut f)?;
+    let then = then(&mut f)?;
+    f.done()?;
+    Ok((scan, then))
+}
+
+/// `scan`, then, given `then`, the motor to its pick: an alignment
+/// stage ([`Ops::stage`]).
+pub(super) async fn scan_then(ops: &Ops<'_>, scan: &ScanDef, then: Option<Then>) -> Step {
+    match then {
+        Some(Then { pick, set }) => ops.stage(scan.scan(ops), pick, set).await,
+        None => {
+            let (plan, _points) = scan.scan(ops).plan(ops.dev);
+            ops.ctx.run(plan).await
+        }
+    }
 }
 
 fn moves(f: &mut Fields<'_>) -> Result<Vec<(&'static str, f64)>, String> {
@@ -318,11 +374,7 @@ fn block(at: String, v: &Value) -> Result<Block, String> {
     let map = v
         .as_object()
         .ok_or_else(|| format!("{at}: must be an object, got {v}"))?;
-    let mut f = Fields {
-        at,
-        map,
-        taken: Vec::new(),
-    };
+    let mut f = Fields::new(at, map);
     let kind = f.one_of("kind", &KINDS)?;
     f.at = format!("{} ({kind})", f.at);
     if let Some(note) = f.take("note")
@@ -332,7 +384,11 @@ fn block(at: String, v: &Value) -> Result<Block, String> {
     }
     let when = when(&mut f)?;
     let action = match kind {
-        "scan" => Action::Scan(scan(&mut f)?),
+        "scan" => {
+            let scan = scan_def(&mut f)?;
+            let then = then(&mut f)?.ok_or_else(|| f.err("pick is missing"))?;
+            Action::Scan(scan, then)
+        }
         "move" => Action::Move(moves(&mut f)?),
         "spec" => {
             let line = f.text("command")?.trim();
@@ -401,7 +457,7 @@ async fn steps(ops: &Ops<'_>, blocks: &[Block]) -> Step {
             continue;
         }
         match &b.action {
-            Action::Scan(s) => ops.stage(s.scan(ops), s.pick, s.set).await?,
+            Action::Scan(scan, then) => scan_then(ops, scan, Some(*then)).await?,
             Action::Move(moves) => ops.umv(moves).await?,
             Action::Spec(line) => ops.spec(line).await?,
             Action::Wait(seconds) => ops.sleep(*seconds).await?,
@@ -448,19 +504,23 @@ mod tests {
         assert_eq!(coin.len(), 11);
         assert_eq!(
             coin[6].action,
-            Action::Scan(ScanBlock {
-                motor: "sy",
-                start: -2.5,
-                finish: 2.5,
-                relative: true,
-                motion: Motion::Fly {
-                    seconds: 12.5,
-                    sleep: Duration::from_millis(100)
+            Action::Scan(
+                ScanDef {
+                    motor: "sy",
+                    start: -2.5,
+                    finish: 2.5,
+                    relative: true,
+                    motion: Motion::Fly {
+                        seconds: 12.5,
+                        sleep: Duration::from_millis(100)
+                    },
+                    counter: "ic1",
                 },
-                counter: "ic1",
-                pick: Pick::Peak(Stat::Com),
-                set: None,
-            })
+                Then {
+                    pick: Pick::Peak(Stat::Com),
+                    set: None
+                }
+            )
         );
         let film = template("film");
         assert_eq!(film.len(), 30);
@@ -479,7 +539,7 @@ mod tests {
         let scans: Vec<_> = film
             .iter()
             .filter_map(|b| match &b.action {
-                Action::Scan(s) => Some((s.motor, s.pick, s.set)),
+                Action::Scan(s, t) => Some((s.motor, t.pick, t.set)),
                 _ => None,
             })
             .collect();
@@ -509,7 +569,9 @@ mod tests {
             "pick": "CEN", "set": 0, "note": "half-cut"}),
         )
         .unwrap();
-        let Action::Scan(s) = b.action else { panic!() };
+        let Action::Scan(s, t) = b.action else {
+            panic!()
+        };
         assert!(s.relative);
         assert_eq!(
             s.motion,
@@ -519,14 +581,16 @@ mod tests {
                 preset: Preset::Seconds(0.5),
             }
         );
-        assert_eq!(s.set, Some(0.0));
+        assert_eq!(t.set, Some(0.0));
         let b = one(
             json!({"kind": "scan", "type": "ascan", "motor": "th", "start": -0.6,
             "finish": 0.6, "intervals": 30, "monitor": 10000, "settle": 0, "counter": "det",
             "pick": "CEN"}),
         )
         .unwrap();
-        let Action::Scan(s) = b.action else { panic!() };
+        let Action::Scan(s, _) = b.action else {
+            panic!()
+        };
         assert_eq!(
             s.motion,
             Motion::Step {
@@ -575,6 +639,30 @@ mod tests {
                     }),
                 ]
             }
+        );
+    }
+
+    #[test]
+    fn a_scan_item_is_a_scan_block_its_pick_optional() {
+        let fields = json!({"type": "lup", "motor": "th", "start": -0.6, "finish": 0.6,
+            "intervals": 30, "time": 0.5, "settle": 0.1, "counter": "det", "pick": "xMAX",
+            "dip": true, "set": 0.6});
+        let mut fields = fields.as_object().unwrap().clone();
+        let (scan, then) = scan_item("x", &fields).unwrap();
+        let mut block = fields.clone();
+        block.insert("kind".into(), json!("scan"));
+        assert_eq!(
+            one(Value::Object(block.clone())).unwrap().action,
+            Action::Scan(scan, then.unwrap())
+        );
+        for key in ["pick", "dip", "set"] {
+            fields.remove(key);
+            block.remove(key);
+        }
+        assert_eq!(scan_item("x", &fields).unwrap().1, None);
+        assert_eq!(
+            one(Value::Object(block)).unwrap_err(),
+            "p: block 1 (scan): pick is missing"
         );
     }
 
@@ -635,7 +723,7 @@ mod tests {
         );
         let pick = |b: Value| -> Result<Pick, String> {
             match one(b)?.action {
-                Action::Scan(s) => Ok(s.pick),
+                Action::Scan(_, t) => Ok(t.pick),
                 other => panic!("{other:?}"),
             }
         };

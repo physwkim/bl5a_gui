@@ -93,7 +93,7 @@ def test_tools_and_their_arguments():
     mar = tools["queue_mar_series"].input_schema
     assert set(mar["required"]) == {"name", "texpo", "beamstop_in_place"}
     assert tools["queue_alignment"].input_schema["required"] == ["sequence"]
-    assert set(tools["queue_scan"].input_schema["required"]) == {"motor", "start", "finish", "intervals", "time"}
+    assert tools["queue_scan"].input_schema["required"] == ["scan"]
     assert set(tools["save_alignment_sequence"].input_schema["required"]) == {"name", "blocks"}
     assert tools["alignment_sequences"].annotations.read_only_hint
     assert tools["messages"].description.startswith("What the GUI's Messages tab shows")
@@ -101,6 +101,38 @@ def test_tools_and_their_arguments():
     assert tools["status"].annotations.read_only_hint
     assert tools["abort"].annotations.destructive_hint
     assert tools["stop_all"].annotations.destructive_hint
+
+
+def test_queue_scan_queues_the_scan_forms_item():
+    bl = mcpserver.Beamline("tcp://127.0.0.1:1", "tcp://127.0.0.1:2", "tcp://127.0.0.1:3", "tcp://127.0.0.1:4",
+                            "test")
+    added = []
+    bl.add = lambda got, folder: added.append((got, folder)) or {"added": len(got)}
+    scan = {"type": "clup", "motor": "sy", "start": -1, "finish": 1, "time": 5, "sleep": 0.05, "counter": "ic1",
+            "pick": "COM"}
+    anyio.run(mcpserver.build(bl).call_tool, "queue_scan", {"scan": scan, "series": "s1"})
+    assert added == [([items.scan(scan, "s1")], None)]
+    with pytest.raises(Exception, match="scan: dip is for a pick, and pick is missing"):
+        anyio.run(mcpserver.build(bl).call_tool, "queue_scan", {"scan": dict(scan, pick=None, dip=True)})
+
+
+def test_a_scan_items_stage_is_in_scans_not_in_alignment():
+    bl = mcpserver.Beamline("tcp://127.0.0.1:1", "tcp://127.0.0.1:2", "tcp://127.0.0.1:3", "tcp://127.0.0.1:4",
+                            "test")
+    stage = {"stage": "lup th -0.1 0.1 2 1", "motor": "th", "pick": "CEN", "dip": False, "before": 0.0,
+             "target": 0.0, "after": 0.0}
+    for name, doc in (("start", {"uid": "p", "plan_name": "scan", "series": "s", "time": 1.0}),
+                      ("descriptor", {"uid": "pd", "name": "stages", "run_start": "p"}),
+                      ("start", {"uid": "s", "plan_name": "lup", "motors": ["th"], "det": "det"}),
+                      ("stop", {"run_start": "s", "exit_status": "success"}),
+                      ("event", {"descriptor": "pd", "data": stage}),
+                      ("stop", {"run_start": "p", "exit_status": "success"})):
+        bl._document(name, doc)
+    server = mcpserver.build(bl)
+    (row,) = json.loads(anyio.run(server.call_tool, "scans", {}).content[0].text)
+    assert row["went"] == {"pick": "CEN", "dip": False, "before": 0.0, "target": 0.0, "after": 0.0, "set": None}
+    got = json.loads(anyio.run(server.call_tool, "alignment", {}).content[0].text)
+    assert got["stages"]["rows"] == [] and got["history"] == []
 
 
 def test_alignment_sequences_of_no_user_are_the_default_users(tmp_path):

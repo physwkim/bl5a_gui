@@ -28,9 +28,6 @@ class FileNameTest(unittest.TestCase):
                 (lambda: items.mar_series("f", ""), "Texpo is empty: type seconds, or negative monitor counts"),
                 (lambda: items.mar_series("f", 2, n=3, ti=""), "Ti is empty: type the minutes"),
                 (lambda: items.mar_series("f", 2, filters=""), "Filters is empty: type the four blades"),
-                (lambda: items.step_scan("th", "", 1, 10, 1), "Start is empty: type a number"),
-                (lambda: items.step_scan("th", 0, None, 10, 1), "Finish is empty: type a number"),
-                (lambda: items.step_scan("th", 0, 1, 10, ""), "Time is empty: type the seconds"),
                 (lambda: items.insitu_items([{"align": False}], "s"), "row 1: name is empty: type the mar345"),
                 (lambda: items.insitu_items([{"align": False, "name": "f", "texpo": ""}], "s"),
                  "row 1: texpo is empty: type seconds"),
@@ -42,8 +39,6 @@ class FileNameTest(unittest.TestCase):
         # Filled in but wrong: the rule, as before.
         with self.assertRaisesRegex(Invalid, "^File name: 1 to 27 characters"):
             items.mar_series("a b", 2)
-        with self.assertRaisesRegex(Invalid, "^Start: not a number: 'x'"):
-            items.step_scan("th", "x", 1, 10, 1)
 
     def test_bytes_not_characters(self):
         # qs counts bytes (Rust str::len).
@@ -349,30 +344,45 @@ class FinishedTest(unittest.TestCase):
                          "mar_series ended: fail: plan build failed: texpo")
 
 
-class StepScanTest(unittest.TestCase):
-    def test_lup(self):
-        item = items.step_scan("th", "-0.1", 0.1, 4, "0.1", relative=True)
-        self.assertEqual(item, {"item_type": "plan", "name": "step_scan", "args": [],
-                                "kwargs": {"motor": "th", "start": -0.1, "finish": 0.1, "intervals": 4,
-                                           "time": 0.1, "relative": True, "counter": "det"}})
-        self.assertEqual(items.describe(item)[:3], ("step_scan", "",
-                                                    "motor=th start=-0.1 finish=0.1 intervals=4 time=0.1 "
-                                                    "relative=True counter=det"))
+class ScanItemTest(unittest.TestCase):
+    LUP = {"type": "lup", "motor": "th", "start": -0.1, "finish": 0.1, "intervals": 4, "time": 0.1, "settle": 0,
+           "counter": "det"}
 
-    def test_ascan_in_a_series(self):
-        item = items.step_scan("shold", 1, -1, 10, 0.5, counter="ic1", series="cell1")
+    def test_a_lup_going_nowhere_after(self):
+        item = items.scan(self.LUP)
+        self.assertEqual(item, {"item_type": "plan", "name": "scan", "args": [], "kwargs": self.LUP})
+        self.assertEqual(items.describe(item)[:4], ("scan", "", "lup th -0.1 0.1 4 0.1  det", "scan"))
+
+    def test_a_clup_to_its_cen_of_a_dip_in_a_series(self):
+        fields = {"type": "clup", "motor": "sy", "start": -1, "finish": 1, "time": 5, "sleep": 0.05,
+                  "counter": "ic1", "pick": "CEN", "dip": True, "set": 0}
+        item = items.scan(fields, series="cell1")
         self.assertEqual(item["kwargs"]["md"], {"series": "cell1"})
-        self.assertFalse(item["kwargs"]["relative"])
-        self.assertEqual(items.folder(item), "cell1")
+        self.assertEqual(items.describe(item)[2:4], ("clup sy -1 1 5 0.05  ic1 → CEN dip, set 0", "cell1"))
+        self.assertEqual(items.describe(items.scan(dict(self.LUP, monitor=1000, time=None)))[2],
+                         "lup th -0.1 0.1 4 -1000  det")
 
     def test_qs_rules(self):
-        # The same refusals as qs's refuses_what_the_scan_cannot_take.
-        for args, kw in [(("chi", 0, 1, 2, 1), {}), (("th", 0, 1, 2, 1), {"counter": "pd"}),
-                         (("th", 0, 1, 2, 1), {"counter": "sec"}), (("th", 0, 1, 0, 1), {}),
-                         (("th", 0, 1, 2.5, 1), {}), (("th", 0, 1, 2, 0), {}), (("th", 0, 1, 2, -1), {}),
-                         (("th", "x", 1, 2, 1), {}), (("th", 0, math.inf, 2, 1), {})]:
-            with self.assertRaises(Invalid, msg=repr((args, kw))):
-                items.step_scan(*args, **kw)
+        # The same refusals as qs plans/scan.rs's.
+        for extra, message in (
+                ({"dip": True}, "scan: dip is for a pick, and pick is missing"),
+                ({"set": 0}, "scan: set is for a pick, and pick is missing"),
+                ({"pick": "EDGE", "dip": True}, "scan: dip is for CEN, COM and xMAX, not EDGE"),
+                ({"pick": "MAX"}, "scan: pick must be one of"),
+                ({"counter": "sec"}, "scan: counter must be one of"),
+                ({"motor": "chi"}, "scan: motor must be one of"),
+                ({"sleep": 0.1}, "scan: unknown field sleep"),
+                ({"type": "cscan"}, "scan: sleep is missing"),
+                ({"type": "cscan", "sleep": 0.05}, "scan: unknown field intervals"),
+                ({"relative": True}, "scan: unknown field relative"),
+                ({"motor": None}, "scan: motor is missing"),
+                ({"intervals": 0}, "scan: intervals must be a whole number >= 1"),
+                ({"intervals": 2.5}, "scan: intervals must be a whole number >= 1"),
+                ({"time": 0}, "scan: time must be seconds > 0"),
+                ({"start": math.inf}, "scan: start must be a number"),
+                ({"time": None}, "scan: time or monitor is missing")):
+            with self.subTest(extra=extra), self.assertRaisesRegex(Invalid, "^" + re.escape(message)):
+                items.scan(dict(self.LUP, **extra))
 
 
 if __name__ == "__main__":

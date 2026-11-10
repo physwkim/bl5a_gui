@@ -174,6 +174,18 @@ impl<'a> Args<'a> {
             .collect()
     }
 
+    /// Every parameter given a non-null value, by name.
+    pub fn named(&self) -> Map<String, Value> {
+        self.names
+            .iter()
+            .filter_map(|n| {
+                self.get(n)
+                    .filter(|v| !v.is_null())
+                    .map(|v| (n.to_string(), v.clone()))
+            })
+            .collect()
+    }
+
     /// The `md` object, empty when absent.
     pub fn md(&self) -> Result<HashMap<String, Value>, String> {
         match self.get("md").filter(|v| !v.is_null()) {

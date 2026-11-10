@@ -339,14 +339,17 @@ FullFileName_RBV), 온도(`BL5A:TC:*`), suspender용 링
   니모닉이고 `#O`·`#P`·`#G`·`#Q`는 없다(문서에 모터 표와 기하가 없다).
 
 큐 아이템은 plan 넷이다. 노출은 그 안의 조각이고 따로 큐에 넣지 않는다.
-스캔도 그렇지만, GUI의 Scan 폼이 넣는 스텝 스캔 하나는 `step_scan`이다.
+스캔도 그렇지만, GUI의 Scan 폼이 넣는 스캔 하나는 `scan`이다. 필드는 정렬 scan 블록의
+것(`blocks::scan_item`이 같은 파서를 쓴다)이고 pick만 없어도 된다. pick이 있으면
+정렬 stage처럼 그 위치로 `umv`(그리고 `set`)하고 `stages` 이벤트를 내지만, GUI는
+`align`·`insitu_step` run의 stage만 Stages 표와 정렬 이력에 넣는다.
 
 | plan | 대응 매크로 |
 | --- | --- |
 | `align(blocks, sequence)` | coin_align, align_in.mac(정렬 순서로) |
 | `mar_series(name, ti, texpo, n, mode, filters)` | mymar1(n=1), mymar; mode의 매크로로 노출 |
 | `insitu_step(T, ramp, wait, soak, blocks, sequence, th_list, texpo, name)` | myinsitu의 온도 한 칸 + mymar_in |
-| `step_scan(motor, start, finish, intervals, time, relative, counter)` | ascan, lup(relative) |
+| `scan(type, motor, start, finish, …, counter, pick, dip, set)` | ascan, lup, cscan, clup; pick이 있으면 CEN·pl_COM·pl_xMAX·EDGE로 umv |
 
 정렬은 블록 목록(`qs/src/plans/blocks.rs`)이다. 블록은 scan(type
 ascan·lup·cscan·clup, motor, start, finish, 스텝이면 time(점당 초)이나

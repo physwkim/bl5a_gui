@@ -468,7 +468,8 @@ class MainWindow(qt.QMainWindow):
         self.scanTab.stop(scan)
 
     def _stage(self, run, stage, scan):
-        self.stages.add(stage)
+        if run.plan in docs.ALIGNING:
+            self.stages.add(stage)
         if scan is not None:
             self.scanTab.stage(scan, stage)
 

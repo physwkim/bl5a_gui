@@ -129,6 +129,99 @@ def parse_when(text):
     return {"motor": words[0], "op": words[1], "value": items.number(words[2], "when: value")}
 
 
+# The Scan form's pick that leaves the motor where its scan does.
+NO_PICK = "none"
+
+
+class ScanFields:
+    """A scan's rows in `form`, from the fields `b`: an alignment scan
+    block's, and the Scan form's, whose pick may be `optional`."""
+
+    def __init__(self, form, b, optional=False):
+        self.type = _combo(list(items.SCAN_TYPES), b["type"])
+        self.type.setToolTip("ascan/cscan: absolute; lup/clup: relative to where the motor is.\n"
+                             "ascan/lup: steps; cscan/clup: SPEC's fly scan.")
+        self.motor = _combo(config.MOTORS, b["motor"])
+        self.start, self.finish = _line(_g(b["start"])), _line(_g(b["finish"]))
+        self.intervals = qt.QSpinBox()
+        self.intervals.setRange(1, 100000)
+        self.intervals.setValue(int(b.get("intervals") or 20))
+        self.time = _line(_g(b["monitor"] if "monitor" in b else b["time"]))
+        self.time.setToolTip("Seconds per point (ascan, lup) or of the whole move (cscan, clup),\n"
+                             "or the monitor counts each point counts to")
+        self.per = _combo(["seconds", "monitor"], "monitor" if "monitor" in b else "seconds")
+        self.per.setToolTip("ascan/lup: count each point for seconds or to monitor counts on icxrd\n"
+                            "(SPEC's MON); cscan/clup count for seconds")
+        count = qt.QHBoxLayout()
+        count.setContentsMargins(0, 0, 0, 0)
+        count.addWidget(self.time)
+        count.addWidget(self.per)
+        self.settle = _line(_g(b.get("settle", 0.1)))
+        self.settle.setToolTip("ascan/lup: seconds to wait at each point before counting")
+        self.sleep = _line(_g(b.get("sleep", 0.05)))
+        self.sleep.setToolTip("cscan/clup: SPEC's sleep between the fly scan's samples, seconds")
+        self.counter = _combo(items.COUNTERS, b["counter"])
+        self.pick = _combo(([NO_PICK] if optional else []) + list(items.PICKS), b.get("pick") or NO_PICK)
+        tip = ("Where the motor goes after the scan: CEN (FWHM centre), COM (centre of mass),\n"
+               "xMAX (the maximum) or EDGE (the half-height edge of a step)")
+        if optional:
+            tip += ";\nnone: where the scan leaves it, an ascan or cscan at finish, a lup or clup back where it was"
+        self.pick.setToolTip(tip)
+        self.dip = qt.QCheckBox("of a dip")
+        self.dip.setChecked(bool(b.get("dip")))
+        self.dip.setToolTip("The scan dips rather than peaks: CEN, COM and xMAX of the scan turned over,\n"
+                            "its maximum less each point. Not for EDGE.")
+        self.set = _line(_g(b.get("set")))
+        self.set.setToolTip("Empty: keep the motor's position; a number: `set motor <number>` there")
+        for label, w in (("Type", self.type), ("Motor", self.motor), ("Start", self.start),
+                         ("Finish", self.finish), ("Intervals", self.intervals), ("Count", count),
+                         ("Settle [s]", self.settle), ("Sleep [s]", self.sleep), ("Counter", self.counter),
+                         ("Go to", self.pick), ("", self.dip), ("Set to", self.set)):
+            form.addRow(label, w)
+        self.type.currentTextChanged.connect(self._type)
+        self._type()
+        self.pick.currentTextChanged.connect(self._pick)
+        self._pick()
+
+    def _type(self):
+        fly = items.SCAN_TYPES[self.type.currentText()]
+        self.intervals.setEnabled(not fly)
+        self.settle.setEnabled(not fly)
+        self.sleep.setEnabled(fly)
+        if fly:
+            self.per.setCurrentText("seconds")
+        self.per.setEnabled(not fly)
+
+    def _pick(self):
+        pick = self.pick.currentText()
+        self.dip.setEnabled(pick not in ("EDGE", NO_PICK))
+        self.set.setEnabled(pick != NO_PICK)
+
+    def fields(self):
+        """The scan's fields as qs takes them, without a kind; Invalid
+        naming the box otherwise."""
+        t = self.type.currentText()
+        b = dict(type=t, motor=self.motor.currentText(), start=_num(self.start, "Start"),
+                 finish=_num(self.finish, "Finish"))
+        if self.per.currentText() == "monitor":
+            b["monitor"] = _num(self.time, "Count")
+        else:
+            b["time"] = _num(self.time, "Count")
+        if items.SCAN_TYPES[t]:
+            b["sleep"] = _num(self.sleep, "Sleep")
+        else:
+            b.update(intervals=self.intervals.value(), settle=_num(self.settle, "Settle"))
+        b["counter"] = self.counter.currentText()
+        pick = self.pick.currentText()
+        if pick != NO_PICK:
+            b["pick"] = pick
+            if self.dip.isEnabled() and self.dip.isChecked():
+                b["dip"] = True
+            if self.set.text().strip():
+                b["set"] = _num(self.set, "Set to")
+        return b
+
+
 class BlockDialog(qt.QDialog):
     """One block's fields, by its kind; OK only when qs would take it."""
 
@@ -139,47 +232,7 @@ class BlockDialog(qt.QDialog):
         form = qt.QFormLayout(self)
         b = block
         if self.kind == "scan":
-            self.type = _combo(list(items.SCAN_TYPES), b["type"])
-            self.type.setToolTip("ascan/cscan: absolute; lup/clup: relative to where the motor is.\n"
-                                 "ascan/lup: steps; cscan/clup: SPEC's fly scan.")
-            self.motor = _combo(config.MOTORS, b["motor"])
-            self.start, self.finish = _line(_g(b["start"])), _line(_g(b["finish"]))
-            self.intervals = qt.QSpinBox()
-            self.intervals.setRange(1, 100000)
-            self.intervals.setValue(int(b.get("intervals") or 20))
-            self.time = _line(_g(b["monitor"] if "monitor" in b else b["time"]))
-            self.time.setToolTip("Seconds per point (ascan, lup) or of the whole move (cscan, clup),\n"
-                                 "or the monitor counts each point counts to")
-            self.per = _combo(["seconds", "monitor"], "monitor" if "monitor" in b else "seconds")
-            self.per.setToolTip("ascan/lup: count each point for seconds or to monitor counts on icxrd\n"
-                                "(SPEC's MON); cscan/clup count for seconds")
-            count = qt.QHBoxLayout()
-            count.setContentsMargins(0, 0, 0, 0)
-            count.addWidget(self.time)
-            count.addWidget(self.per)
-            self.settle = _line(_g(b.get("settle", 0.1)))
-            self.settle.setToolTip("ascan/lup: seconds to wait at each point before counting")
-            self.sleep = _line(_g(b.get("sleep", 0.05)))
-            self.sleep.setToolTip("cscan/clup: SPEC's sleep between the fly scan's samples, seconds")
-            self.counter = _combo(items.COUNTERS, b["counter"])
-            self.pick = _combo(items.PICKS, b["pick"])
-            self.pick.setToolTip("Where the motor goes after the scan: CEN (FWHM centre), COM (centre of mass),\n"
-                                 "xMAX (the maximum) or EDGE (the half-height edge of a step)")
-            self.dip = qt.QCheckBox("of a dip")
-            self.dip.setChecked(bool(b.get("dip")))
-            self.dip.setToolTip("The scan dips rather than peaks: CEN, COM and xMAX of the scan turned over,\n"
-                                "its maximum less each point. Not for EDGE.")
-            self.set = _line(_g(b.get("set")))
-            self.set.setToolTip("Empty: keep the motor's position; a number: `set motor <number>` there")
-            for label, w in (("Type", self.type), ("Motor", self.motor), ("Start", self.start),
-                             ("Finish", self.finish), ("Intervals", self.intervals), ("Count", count),
-                             ("Settle [s]", self.settle), ("Sleep [s]", self.sleep), ("Counter", self.counter),
-                             ("Go to", self.pick), ("", self.dip), ("Set to", self.set)):
-                form.addRow(label, w)
-            self.type.currentTextChanged.connect(self._type)
-            self._type()
-            self.pick.currentTextChanged.connect(self._pick)
-            self._pick()
+            self.scan = ScanFields(form, b)
         elif self.kind == "move":
             self.moves = _line(" ".join("{} {}".format(m, _g(x)) for m, x in b["moves"]))
             self.moves.setToolTip("Motor position pairs, moved together as umv moves them: tth 1 th 0")
@@ -213,38 +266,11 @@ class BlockDialog(qt.QDialog):
         form.addRow(buttons)
         self.result_block = None
 
-    def _type(self):
-        fly = items.SCAN_TYPES[self.type.currentText()]
-        self.intervals.setEnabled(not fly)
-        self.settle.setEnabled(not fly)
-        self.sleep.setEnabled(fly)
-        if fly:
-            self.per.setCurrentText("seconds")
-        self.per.setEnabled(not fly)
-
-    def _pick(self):
-        self.dip.setEnabled(self.pick.currentText() != "EDGE")
-
     def block(self):
         """The block the fields give, as qs takes it; Invalid otherwise."""
         b = {"kind": self.kind}
         if self.kind == "scan":
-            t = self.type.currentText()
-            b.update(type=t, motor=self.motor.currentText(), start=_num(self.start, "Start"),
-                     finish=_num(self.finish, "Finish"))
-            if self.per.currentText() == "monitor":
-                b["monitor"] = _num(self.time, "Count")
-            else:
-                b["time"] = _num(self.time, "Count")
-            if items.SCAN_TYPES[t]:
-                b["sleep"] = _num(self.sleep, "Sleep")
-            else:
-                b.update(intervals=self.intervals.value(), settle=_num(self.settle, "Settle"))
-            b.update(counter=self.counter.currentText(), pick=self.pick.currentText())
-            if self.dip.isEnabled() and self.dip.isChecked():
-                b["dip"] = True
-            if self.set.text().strip():
-                b["set"] = _num(self.set, "Set to")
+            b.update(self.scan.fields())
         elif self.kind == "move":
             b["moves"] = parse_moves(self.moves.text())
         elif self.kind == "spec":

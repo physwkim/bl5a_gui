@@ -137,18 +137,7 @@ def text(b):
     """One block as a line: what it does, in the macros' words."""
     kind = b["kind"]
     if kind == "scan":
-        # As the Stages table names the scan: SPEC's argument order.
-        if items.SCAN_TYPES[b["type"]]:
-            how = "{} {}".format(_g(b["time"]), _g(b["sleep"]))
-        else:
-            # SPEC's count time: monitor counts as their negative.
-            how = "{} {}".format(b["intervals"], _g(-b["monitor"] if "monitor" in b else b["time"]))
-        line = "{} {} {} {} {}  {} → {}".format(b["type"], b["motor"], _g(b["start"]), _g(b["finish"]), how,
-                                                b["counter"], b["pick"])
-        if b.get("dip"):
-            line += " dip"
-        if b.get("set") is not None:
-            line += ", set {}".format(_g(b["set"]))
+        line = items.scan_line(b)
     elif kind == "move":
         line = "umv " + " ".join("{} {}".format(m, _g(x)) for m, x in b["moves"])
     elif kind == "spec":

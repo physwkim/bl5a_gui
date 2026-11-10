@@ -4,7 +4,7 @@ and emits them; nothing reaches the queue that `items` refused."""
 from silx.gui import qt
 
 from . import config, items
-from .editor import SequenceCombo, resolve
+from .editor import ScanFields, SequenceCombo, resolve
 from .items import Invalid
 
 
@@ -97,52 +97,28 @@ class BatteryForm(qt.QWidget):
 
 
 class ScanForm(qt.QWidget):
-    """One ascan or lup of any motor as a step_scan item: drawn in the Scan
-    tab and written to the series' SPEC file, as an alignment's scans."""
+    """One scan of any motor as a scan item, an alignment scan block's
+    fields: drawn in the Scan tab and written to the series' SPEC file as
+    an alignment's scans, then, given Go to, the motor to the scan's CEN,
+    COM, xMAX or EDGE."""
 
     queueRequested = qt.Signal(object)
+    # A lup of the first motor, its motor left where the scan leaves it.
+    NEW = {"type": "lup", "motor": config.MOTORS[0], "start": -0.1, "finish": 0.1, "intervals": 10, "time": 1,
+           "settle": 0, "sleep": 0.05, "counter": "det"}
 
     def __init__(self, parent=None):
         super().__init__(parent)
         form = qt.QFormLayout(self)
-        self.lup = qt.QRadioButton("lup (relative)")
-        self.ascan = qt.QRadioButton("ascan (absolute)")
-        self.lup.setChecked(True)
-        self.lup.setToolTip("start and finish are offsets from where the motor is; it goes back there after")
-        self.ascan.setToolTip("start and finish are positions; the motor stays at finish")
-        modes = qt.QHBoxLayout()
-        modes.addWidget(self.lup)
-        modes.addWidget(self.ascan)
-        form.addRow(modes)
-        self.motor = qt.QComboBox()
-        self.motor.addItems(config.MOTORS)
-        self.start = _line("-0.1")
-        self.finish = _line("0.1")
-        self.intervals = qt.QSpinBox()
-        self.intervals.setRange(1, 10000)
-        self.intervals.setValue(10)
-        self.intervals.setToolTip("Steps; the scan takes intervals + 1 points")
-        self.time = _line("1", "Seconds counted at each point")
-        self.counter = qt.QComboBox()
-        self.counter.addItems(items.COUNTERS)
-        self.counter.setCurrentText("det")
-        self.counter.setToolTip("The counter the scan's CEN, COM and peak are of")
-        self.series = _line(tip="The data folder whose SPEC file gets the scan (no spaces); empty: step_scan")
-        form.addRow("Motor", self.motor)
-        form.addRow("Start", self.start)
-        form.addRow("Finish", self.finish)
-        form.addRow("Intervals", self.intervals)
-        form.addRow("Time [s]", self.time)
-        form.addRow("Counter", self.counter)
+        self.scan = ScanFields(form, self.NEW, optional=True)
+        self.series = _line(tip="The data folder whose SPEC file gets the scan (no spaces); empty: scan")
         form.addRow("Series", self.series)
         self.add = qt.QPushButton("Add to queue")
         form.addRow(self.add)
         self.add.clicked.connect(self._add)
 
     def item(self):
-        return items.step_scan(self.motor.currentText(), self.start.text().strip(), self.finish.text().strip(),
-                               self.intervals.value(), self.time.text().strip(), relative=self.lup.isChecked(),
-                               counter=self.counter.currentText(), series=self.series.text().strip() or None)
+        return items.scan(self.scan.fields(), series=self.series.text().strip() or None)
 
     def _add(self):
         try:

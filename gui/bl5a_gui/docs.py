@@ -30,6 +30,7 @@ class Scan:
     y: list = field(default_factory=list)
     exit_status: str = ""
     reason: str = ""
+    stage: dict = None  # the stage that read this scan, if one did
 
     @property
     def fly(self):
@@ -92,14 +93,14 @@ def outcome(exit_status, reason=None):
 
 
 def history_row(run):
-    """The alignment history's row for a finished run with stages: what the
-    alignment left the sample at.
+    """The alignment history's row for a finished alignment with stages:
+    what it left the sample at. A scan item's stage is no alignment's.
 
     `dth0` is the correction this run made to th's zero, the sum of
     (target − set) over the th stages that redefined th; SPEC's dial is not
     published, so the absolute offset is not known here. The positions
     are the "final" event's, which every alignment records."""
-    if not run.stages and not run.final:
+    if run.plan not in ALIGNING or (not run.stages and not run.final):
         return None
     last = {}
     for s in run.stages:
@@ -173,7 +174,10 @@ class Documents:
             elif isinstance(run, Run):
                 if stream == "stages":
                     run.stages.append(data)
-                    self._emit("on_stage", run, data, self.last_scan.get(run.uid))
+                    scan = self.last_scan.get(run.uid)
+                    if scan is not None:
+                        scan.stage = data
+                    self._emit("on_stage", run, data, scan)
                 elif stream == "final":
                     run.final = data
                 elif stream == "exposures":
