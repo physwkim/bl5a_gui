@@ -349,18 +349,18 @@ class ScanItemTest(unittest.TestCase):
            "counter": "det"}
 
     def test_a_lup_going_nowhere_after(self):
-        item = items.scan(self.LUP)
-        self.assertEqual(item, {"item_type": "plan", "name": "scan", "args": [], "kwargs": self.LUP})
-        self.assertEqual(items.describe(item)[:4], ("scan", "", "lup th -0.1 0.1 4 0.1  det", "scan"))
+        item = items.scan(self.LUP, 11)
+        self.assertEqual(item, {"item_type": "plan", "name": "scan", "args": [], "kwargs": dict(self.LUP, atte=11)})
+        self.assertEqual(items.describe(item)[:4], ("scan", "", "lup th -0.1 0.1 4 0.1  det atte=11", "scan"))
 
     def test_a_clup_to_its_cen_of_a_dip_in_a_series(self):
         fields = {"type": "clup", "motor": "sy", "start": -1, "finish": 1, "time": 5, "sleep": 0.05,
                   "counter": "ic1", "pick": "CEN", "dip": True, "set": 0}
-        item = items.scan(fields, series="cell1")
+        item = items.scan(fields, 0, series="cell1")
         self.assertEqual(item["kwargs"]["md"], {"series": "cell1"})
-        self.assertEqual(items.describe(item)[2:4], ("clup sy -1 1 5 0.05  ic1 → CEN dip, set 0", "cell1"))
-        self.assertEqual(items.describe(items.scan(dict(self.LUP, monitor=1000, time=None)))[2],
-                         "lup th -0.1 0.1 4 -1000  det")
+        self.assertEqual(items.describe(item)[2:4], ("clup sy -1 1 5 0.05  ic1 → CEN dip, set 0 atte=0", "cell1"))
+        self.assertEqual(items.describe(items.scan(dict(self.LUP, monitor=1000, time=None), 11))[2],
+                         "lup th -0.1 0.1 4 -1000  det atte=11")
 
     def test_qs_rules(self):
         # The same refusals as qs plans/scan.rs's.
@@ -380,9 +380,22 @@ class ScanItemTest(unittest.TestCase):
                 ({"intervals": 2.5}, "scan: intervals must be a whole number >= 1"),
                 ({"time": 0}, "scan: time must be seconds > 0"),
                 ({"start": math.inf}, "scan: start must be a number"),
-                ({"time": None}, "scan: time or monitor is missing")):
+                ({"time": None}, "scan: time or monitor is missing"),
+                ({"atte": 0}, "scan: unknown field atte")):
             with self.subTest(extra=extra), self.assertRaisesRegex(Invalid, "^" + re.escape(message)):
-                items.scan(dict(self.LUP, **extra))
+                items.scan(dict(self.LUP, **extra), 11)
+
+    def test_atte_is_what_atten_takes(self):
+        # qs plans/scan.rs's rule: `atten` refuses anything but 0 to 63.
+        self.assertEqual(items.scan(self.LUP, 0)["kwargs"]["atte"], 0)
+        self.assertEqual(items.scan(self.LUP, 63.0)["kwargs"]["atte"], 63)
+        for atte, message in ((64, "atte must be a whole number 0 to 63, got 64"),
+                              (-1, "atte must be a whole number 0 to 63, got -1"),
+                              (2.5, "atte must be a whole number 0 to 63, got 2.5"),
+                              (True, "atte must be a number, got True"),
+                              (None, "atte is missing")):
+            with self.subTest(atte=atte), self.assertRaisesRegex(Invalid, "^" + re.escape("scan: " + message) + "$"):
+                items.scan(self.LUP, atte)
 
 
 if __name__ == "__main__":

@@ -16,7 +16,7 @@ LUP = {"type": "lup", "motor": "sy", "start": -0.1, "finish": 0.1, "time": 1, "i
 class ScanFormTest(unittest.TestCase):
     def test_default_is_a_lup_of_the_first_motor_going_nowhere_after(self):
         f = forms.ScanForm()
-        self.assertEqual(f.item(), items.scan(LUP))
+        self.assertEqual(f.item(), items.scan(LUP, 11), "align_in.mac's atte 11")
         self.assertEqual(f.scan.pick.currentText(), editor.NO_PICK)
         self.assertFalse(f.scan.dip.isEnabled())
         self.assertFalse(f.scan.set.isEnabled())
@@ -36,9 +36,10 @@ class ScanFormTest(unittest.TestCase):
         s.dip.setChecked(True)
         s.set.setText("0")
         f.series.setText("s1")
+        f.atte.setValue(0)
         want = {"type": "clup", "motor": "th", "start": -1, "finish": 1, "time": 5, "sleep": 0.1, "counter": "ic1",
                 "pick": "COM", "dip": True, "set": 0}
-        self.assertEqual(f.item(), items.scan(want, series="s1"))
+        self.assertEqual(f.item(), items.scan(want, 0, series="s1"))
         self.assertEqual(f.item()["kwargs"]["md"], {"series": "s1"})
 
     def test_none_drops_what_a_pick_would_take(self):
@@ -47,7 +48,7 @@ class ScanFormTest(unittest.TestCase):
         f.scan.dip.setChecked(True)
         f.scan.set.setText("1")
         f.scan.pick.setCurrentText(editor.NO_PICK)
-        self.assertEqual(f.item(), items.scan(LUP))
+        self.assertEqual(f.item(), items.scan(LUP, 11))
 
     def test_an_empty_or_wrong_box_is_named(self):
         for box, text, message in (("start", " ", "^Start is empty: type a number$"),

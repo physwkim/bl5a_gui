@@ -2,7 +2,9 @@
 //! ([`super::blocks`]) with the pick optional: an `ascan`, `lup`,
 //! `cscan` or `clup` that runs, draws and lands in the series' SPEC file
 //! like an alignment's, then, given a pick, the motor there (and `set`)
-//! as an alignment stage.
+//! as an alignment stage. The beam is let in as align_in.mac lets it in
+//! for its scans, `atte n`, and after the scan the shutter is closed and
+//! the plate, which the beam reached, erased, as the alignments end.
 
 use std::path::Path;
 use std::sync::Arc;
@@ -30,21 +32,31 @@ const NAMES: &[&str] = &[
     "pick",
     "dip",
     "set",
+    "atte",
     "md",
 ];
 
-/// A `scan` item's scan and what follows it.
-fn parse(args: &Args) -> Result<(ScanDef, Option<Then>), String> {
+/// A `scan` item's `atte n`, its scan and what follows it.
+fn parse(args: &Args) -> Result<(u8, ScanDef, Option<Then>), String> {
     let mut fields = args.named();
     fields.remove("md");
-    blocks::scan_item(PLAN, &fields)
+    let atte = match fields.remove("atte").filter(|v| !v.is_null()) {
+        None => return Err(format!("{PLAN}: atte is missing")),
+        Some(v) => v
+            .as_f64()
+            .filter(|n| (0.0..=63.0).contains(n) && n.fract() == 0.0)
+            .ok_or_else(|| format!("{PLAN}: atte must be a whole number 0 to 63, got {v}"))?
+            as u8,
+    };
+    let (scan, then) = blocks::scan_item(PLAN, &fields)?;
+    Ok((atte, scan, then))
 }
 
 pub(super) fn register(reg: &mut Registry, devices: &Devices, root: &Path) {
     let (dev, data_root) = (devices.clone(), root.to_path_buf());
     let factory: PlanFactory = Arc::new(move |_reg, raw| {
         let args = Args::parse(PLAN, NAMES, raw)?;
-        let (scan, then) = parse(&args)?;
+        let (atte, scan, then) = parse(&args)?;
         let extra = json!({"detectors": ["scaler"], "det": scan.counter, "motors": [scan.motor]});
         let (md, place) = item_md(PLAN, &data_root, extra, args.md()?)?;
         let dev = dev.clone();
@@ -53,7 +65,12 @@ pub(super) fn register(reg: &mut Registry, devices: &Devices, root: &Path) {
             md,
             place.clone(),
             move |ctx| async move {
-                blocks::scan_then(&Ops::new(&ctx, &dev, &place), &scan, then).await
+                let ops = Ops::new(&ctx, &dev, &place);
+                ops.spec(&format!("atte {atte}")).await?;
+                blocks::scan_then(&ops, &scan, then).await?;
+                // Closed first: the beam would reach the erased plate.
+                ops.spec("mar345closeshutter").await?;
+                ops.erase().await
             },
         ))
     });
@@ -63,8 +80,9 @@ pub(super) fn register(reg: &mut Registry, devices: &Devices, root: &Path) {
         factory,
         PlanMeta {
             description: Some(
-                "One scan (ascan, lup, cscan, clup), then, given a pick, the motor to the \
-                 scan's CEN, COM, xMAX or EDGE; an alignment scan block's fields, see doc/usage.md."
+                "`atte n`, one scan (ascan, lup, cscan, clup), then, given a pick, the motor \
+                 to the scan's CEN, COM, xMAX or EDGE; the shutter closed and the plate erased \
+                 after. An alignment scan block's fields, see doc/usage.md."
                     .into(),
             ),
             parameters: vec![
@@ -109,6 +127,11 @@ pub(super) fn register(reg: &mut Registry, devices: &Devices, root: &Path) {
                 ),
                 opt("dip", "bool", "The pick is of a dip (not EDGE)."),
                 opt("set", "float", "`set motor <set>` there."),
+                param(
+                    "atte",
+                    "int",
+                    "0 to 63: `atte n` before the scan, the filters it scans through.",
+                ),
                 optional(param("md", "dict", "Extra start-document metadata."), "{}"),
             ],
         },
@@ -121,10 +144,10 @@ mod tests {
     use serde_json::Value;
 
     const LUP: &str = r#"{"type": "lup", "motor": "th", "start": -0.1, "finish": 0.1,
-        "intervals": 4, "time": 0.1, "settle": 0, "counter": "det"}"#;
+        "intervals": 4, "time": 0.1, "settle": 0, "counter": "det", "atte": 11}"#;
 
     fn read(raw: Value) -> Result<(ScanDef, Option<Then>), String> {
-        parse(&Args::parse(PLAN, NAMES, &raw)?)
+        parse(&Args::parse(PLAN, NAMES, &raw)?).map(|(_, scan, then)| (scan, then))
     }
 
     fn with(extra: Value) -> Value {
@@ -143,9 +166,27 @@ mod tests {
         let (_, then) = read(with(json!({"dip": false}))).unwrap();
         assert_eq!(then, None);
         let clup = json!({"args": ["clup", "sy", -1, 1], "kwargs": {"time": 5, "sleep": 0.05,
-            "counter": "ic1", "md": {"series": "s"}}});
+            "counter": "ic1", "atte": 0, "md": {"series": "s"}}});
         let (scan, then) = read(clup).unwrap();
         assert_eq!((scan.motor, then), ("sy", None));
+    }
+
+    #[test]
+    fn takes_the_attenuation_atte_takes() {
+        let atte = |v: Value| {
+            parse(&Args::parse(PLAN, NAMES, &with(json!({ "atte": v }))).unwrap()).map(|r| r.0)
+        };
+        assert_eq!(atte(json!(11)), Ok(11));
+        assert_eq!(atte(json!(63.0)), Ok(63));
+        for (v, got) in [(json!(64), "64"), (json!(-1), "-1"), (json!(2.5), "2.5")] {
+            assert_eq!(
+                atte(v),
+                Err(format!(
+                    "scan: atte must be a whole number 0 to 63, got {got}"
+                ))
+            );
+        }
+        assert_eq!(atte(Value::Null), Err("scan: atte is missing".into()));
     }
 
     #[test]
@@ -176,7 +217,7 @@ mod tests {
             "scan: unknown argument relative"
         );
         assert_eq!(
-            read(json!({"kwargs": {"type": "lup"}})).unwrap_err(),
+            read(json!({"kwargs": {"type": "lup", "atte": 0}})).unwrap_err(),
             "scan: motor is missing"
         );
     }

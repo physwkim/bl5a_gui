@@ -518,14 +518,21 @@ def align(value, sequence=None, series=None):
     return plan_item("align", **kwargs)
 
 
-def scan(fields, series=None):
+# align_in.mac's `atte 11`: the filters its scans count the direct beam through.
+SCAN_ATTE = 11
+
+
+def scan(fields, atte, series=None):
     """A `scan` item: one scan, an alignment scan block's `fields` without
-    its kind, the pick optional (qs plans/scan.rs)."""
+    its kind, the pick optional, counted through `atte n`'s filters (qs
+    plans/scan.rs)."""
     f = _Fields("scan", fields)
     _scan(f)
     _then(f)
     f.done()
     kwargs = dict(fields)
+    kwargs["atte"] = int(_Fields("scan", {"atte": atte}).num(
+        "atte", lambda n: 0 <= n <= 63 and n == int(n), "a whole number 0 to 63"))
     md = series_md(series)
     if md:
         kwargs["md"] = md
@@ -545,7 +552,8 @@ def describe(item):
             shown.append(scan_line(kw))
         except (KeyError, TypeError, ValueError):
             shown.append("?")
-    for k in ("sequence", "T", "ramp", "wait", "tolerance", "soak", "n", "ti", "texpo", "mode", "filters", "th_list"):
+    for k in ("sequence", "T", "ramp", "wait", "tolerance", "soak", "n", "ti", "texpo", "mode", "filters", "atte",
+              "th_list"):
         if k in kw:
             v = kw[k]
             if k == "sequence":

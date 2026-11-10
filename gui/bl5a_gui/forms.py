@@ -111,6 +111,12 @@ class ScanForm(qt.QWidget):
         super().__init__(parent)
         form = qt.QFormLayout(self)
         self.scan = ScanFields(form, self.NEW, optional=True)
+        self.atte = qt.QSpinBox()
+        self.atte.setRange(0, 63)
+        self.atte.setValue(items.SCAN_ATTE)
+        self.atte.setToolTip("atte n before the scan: the filters the beam is counted through, as align_in.mac's\n"
+                             "atte 11 for its scans. After the scan the shutter is closed and the plate erased.")
+        form.addRow("Attenuation", self.atte)
         self.series = _line(tip="The data folder whose SPEC file gets the scan (no spaces); empty: scan")
         form.addRow("Series", self.series)
         self.add = qt.QPushButton("Add to queue")
@@ -118,7 +124,7 @@ class ScanForm(qt.QWidget):
         self.add.clicked.connect(self._add)
 
     def item(self):
-        return items.scan(self.scan.fields(), series=self.series.text().strip() or None)
+        return items.scan(self.scan.fields(), self.atte.value(), series=self.series.text().strip() or None)
 
     def _add(self):
         try:

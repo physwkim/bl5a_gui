@@ -996,13 +996,18 @@ def build(bl):
                                                            "pick optional: without one the motor stays where "
                                                            "the scan leaves it (an ascan/cscan at finish, a "
                                                            "lup/clup back where it was). " + SCAN)],
+                   atte: Annotated[int, Field(ge=0, le=63, description="`atte n` before the scan: the filters "
+                                                                       "the beam is counted through; 11 is "
+                                                                       "align_in.mac's for its scans")]
+                   = items.SCAN_ATTE,
                    series: Annotated[str | None, SERIES] = None,
                    data_folder: Annotated[str | None, DATA_FOLDER] = None):
         """Queue one scan of a motor, then, given a pick, the motor to the
         scan's CEN, COM, xMAX or EDGE, as SPEC's `umv th CEN` after it. The
-        GUI's Scan form; it draws in the Scan tab and goes to the series'
-        SPEC file."""
-        return out(bl.add([items.scan(scan, series)], data_folder))
+        beam is let in with `atte n`; after the scan the shutter is closed
+        and the plate erased. The GUI's Scan form; it draws in the Scan tab
+        and goes to the series' SPEC file."""
+        return out(bl.add([items.scan(scan, atte, series)], data_folder))
 
     @tool()
     def queue_mar_series(name: Annotated[str, Field(description="mar345 file name: 1-27 characters, no spaces "

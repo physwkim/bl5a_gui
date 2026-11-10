@@ -110,8 +110,11 @@ def test_queue_scan_queues_the_scan_forms_item():
     bl.add = lambda got, folder: added.append((got, folder)) or {"added": len(got)}
     scan = {"type": "clup", "motor": "sy", "start": -1, "finish": 1, "time": 5, "sleep": 0.05, "counter": "ic1",
             "pick": "COM"}
-    anyio.run(mcpserver.build(bl).call_tool, "queue_scan", {"scan": scan, "series": "s1"})
-    assert added == [([items.scan(scan, "s1")], None)]
+    anyio.run(mcpserver.build(bl).call_tool, "queue_scan", {"scan": scan, "atte": 0, "series": "s1"})
+    anyio.run(mcpserver.build(bl).call_tool, "queue_scan", {"scan": scan})
+    assert added == [([items.scan(scan, 0, "s1")], None), ([items.scan(scan, 11)], None)]
+    with pytest.raises(Exception, match="atte"):
+        anyio.run(mcpserver.build(bl).call_tool, "queue_scan", {"scan": scan, "atte": 64})
     with pytest.raises(Exception, match="scan: dip is for a pick, and pick is missing"):
         anyio.run(mcpserver.build(bl).call_tool, "queue_scan", {"scan": dict(scan, pick=None, dip=True)})
 

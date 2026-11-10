@@ -601,7 +601,11 @@ Counter whose statistics are taken. **Go to** `none` leaves the motor
 where the scan left it; CEN, COM, xMAX or EDGE then moves it there, as
 an alignment stage does, after the same
 [outlier filter](#before-a-stage-moves), with **of a dip** and
-**Set to** as in a block. The scan is drawn here, its target marked,
+**Set to** as in a block. **Attenuation** is the `atte n` the item
+sends before the scan, the filters the beam is counted through; 11, as
+align_in.mac's scans, is the default. After the scan the shutter is
+closed and the plate, which the beam reached, erased, as an alignment
+ends. The scan is drawn here, its target marked,
 and goes to its series' `.spec` file like an alignment's scans; with no
 Series it goes to the data folder `scan`. A scan item's move is not an
 alignment stage: it is not in the Stages table or the alignment
