@@ -41,7 +41,7 @@ class LayoutTest(unittest.TestCase):
         queue = w.centralWidget()
         self.assertGreaterEqual(queue.viewport().width(), w.queueView.minimumSizeHint().width(),
                                 "the first layout shows the whole queue")
-        w.resizeDocks([w.panes["motors"]], [1300], qt.Qt.Horizontal)
+        w.resizeDocks([w.panes["setup"]], [1300], qt.Qt.Horizontal)
         self.app.processEvents()
         self.assertLess(queue.width(), w.queueView.minimumSizeHint().width())
         w.plots.resize(300, 300)
@@ -73,6 +73,19 @@ class LayoutTest(unittest.TestCase):
         self.app.processEvents()
         for key, (_, label) in w.status.labels.items():
             self.assertGreaterEqual(label.width(), label.sizeHint().width(), key)
+
+    def test_the_motors_are_over_the_queue_with_every_row_at_the_gui_font(self):
+        font = self.app.font()
+        self.addCleanup(self.app.setFont, font)
+        self.app.setFont(qt.QFont(config.FONT, config.FONT_PT))
+        w = self.window()
+        m, s, q = (qt.QRect(x.mapTo(w, qt.QPoint(0, 0)), x.size())
+                   for x in (w.panes["motors"], w.panes["setup"], w.centralWidget()))
+        self.assertEqual((m.left(), m.width()), (q.left(), q.width()), "over the queue only")
+        self.assertLess(m.bottom(), q.top())
+        self.assertEqual(s.top(), m.top(), "Setup up to the toolbars beside them")
+        area = w.panes["motors"].widget()
+        self.assertGreaterEqual(area.viewport().height(), w.motors.minimumSizeHint().height())
 
     def test_the_tabs_are_in_a_window_of_their_own(self):
         w = self.window()

@@ -129,6 +129,7 @@ class MotorsPanel(qt.QGroupBox):
         buttons.addWidget(self.measurePos)
         grid.addLayout(buttons, last, 0, 1, 6)
         grid.setRowStretch(last + 1, 1)  # a pane taller than the rows: the space goes below them
+        grid.setColumnStretch(6, 1)  # and wider: right of them
         pvs.changed.connect(self._changed)
         pvs.connected.connect(self._connected)
         self.setAllowed(False)

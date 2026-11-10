@@ -28,13 +28,14 @@ STOP_ALL = config.SPEC + "Cmd:Abort"
 # in the Alignment tab; and whether the panes of an area share it as
 # tabs (the first in front) or split it.
 PANES = (
-    ("window", qt.Qt.LeftDockWidgetArea, True, ("setup", "motors")),
+    ("window", qt.Qt.LeftDockWidgetArea, False, ("setup",)),
+    ("window", qt.Qt.TopDockWidgetArea, False, ("motors",)),
     ("window", qt.Qt.BottomDockWidgetArea, True, ("spec", "commands", "messages")),
     ("alignment", qt.Qt.BottomDockWidgetArea, False, ("stages", "history")),
 )
 # A saved layout of another version is not restored: the panes it
 # placed have moved since.
-LAYOUT = 2
+LAYOUT = 3
 
 
 def _scrolled(widget):
@@ -128,6 +129,7 @@ class MainWindow(qt.QMainWindow):
         for host in self.hosts.values():
             host.setDockOptions(host.dockOptions() | qt.QMainWindow.AllowNestedDocks)
             host.setTabPosition(qt.Qt.AllDockWidgetAreas, qt.QTabWidget.North)
+        self.setCorner(qt.Qt.TopLeftCorner, qt.Qt.LeftDockWidgetArea)  # Motors over the queue only
         hostOf = {name: self.hosts[host] for host, _, _, names in PANES for name in names}
         self.panes = {}
         for name, title, widget in (
@@ -177,7 +179,8 @@ class MainWindow(qt.QMainWindow):
         self.plotsAct.triggered.connect(self._showPlots)
         self._view(self.menuBar().addMenu("View"))
         separator = self.style().pixelMetric(qt.QStyle.PM_DockWidgetSeparatorExtent)
-        self.resize(self._leftWidth() + separator + self.queueView.minimumSizeHint().width(), 1000)
+        middle = max(self.queueView.minimumSizeHint().width(), self.motors.minimumSizeHint().width())
+        self.resize(self._leftWidth() + separator + middle, 1000)
         self.move(self.screen().availableGeometry().topLeft())
         self.defaultLayout()
         self._restoreLayout()
@@ -252,8 +255,11 @@ class MainWindow(qt.QMainWindow):
                 for before, after in zip(names, names[1:]):
                     host.tabifyDockWidget(self.panes[before], self.panes[after])
                 self.panes[names[0]].raise_()
-        self.resizeDocks([self.panes["motors"]], [self._leftWidth()], qt.Qt.Horizontal)
-        self.resizeDocks([self.panes["spec"]], [200], qt.Qt.Vertical)
+        self.resizeDocks([self.panes["setup"]], [self._leftWidth()], qt.Qt.Horizontal)
+        motors = self.panes["motors"]
+        # Every motor's row: the contents' height with the pane's title bar.
+        tall = self.motors.minimumSizeHint().height() + motors.sizeHint().height() - motors.widget().sizeHint().height()
+        self.resizeDocks([motors, self.panes["spec"]], [tall, 200], qt.Qt.Vertical)
         self.alignment.resizeDocks([self.panes["stages"]], [230], qt.Qt.Vertical)
         self._placePlots()
         self.plots.setVisible(self.isVisible())  # the first start shows it with this window
@@ -275,10 +281,10 @@ class MainWindow(qt.QMainWindow):
         return super().eventFilter(watched, event)
 
     def _leftWidth(self):
-        # As wide as the wider of their contents at the font in use, beside
-        # the scroll bar of Setup, which is taller than them.
-        left = [self.panes[name].widget() for name in ("setup", "motors")]
-        return max(a.widget().minimumSizeHint().width() for a in left) + left[0].verticalScrollBar().sizeHint().width()
+        # As wide as Setup's contents at the font in use, beside its scroll
+        # bar: they are taller than the pane.
+        area = self.panes["setup"].widget()
+        return area.widget().minimumSizeHint().width() + area.verticalScrollBar().sizeHint().width()
 
     def setVisible(self, visible):
         # The plots window shows and closes with this one.
