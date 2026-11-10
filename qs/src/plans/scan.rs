@@ -4,7 +4,7 @@
 //! like an alignment's, then, given a pick, the motor there (and `set`)
 //! as an alignment stage. The beam is let in as align_in.mac lets it in
 //! for its scans, `atte n`, and after the scan the shutter is closed and
-//! the plate, which the beam reached, erased, as the alignments end.
+//! the plate, which the beam reached, erased (`mar345erase`).
 
 use std::path::Path;
 use std::sync::Arc;
@@ -70,7 +70,7 @@ pub(super) fn register(reg: &mut Registry, devices: &Devices, root: &Path) {
                 blocks::scan_then(&ops, &scan, then).await?;
                 // Closed first: the beam would reach the erased plate.
                 ops.spec("mar345closeshutter").await?;
-                ops.erase().await
+                ops.spec("mar345erase").await
             },
         ))
     });
