@@ -237,8 +237,8 @@ class AlignBox(qt.QGroupBox):
             # "&&": a lone "&" in an action's text marks a shortcut key.
             menu.addAction(name.replace("&", "&&"), lambda name=name: self._load(name))
         if not names:
-            menu.addAction("No sequences saved by {!r}".format(user) if user and root
-                           else "Set the Data folder and a User first").setEnabled(False)
+            menu.addAction("No sequences saved by {!r}".format(sequences.owner(user)) if root
+                           else "Set the Data folder first").setEnabled(False)
 
     def _load(self, name):
         try:

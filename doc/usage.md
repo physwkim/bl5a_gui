@@ -397,7 +397,7 @@ selected loop counts with the blocks inside it. Then:
 | Delete | deletes the user's saved sequence and loads Thin film |
 | Close | closes the window |
 
-Saving needs a Data folder and a User. A name is 1 to 64 characters,
+Saving needs a Data folder. A name is 1 to 64 characters,
 not starting with `.`, without `/` or `\`, and not Coin cell or Thin film.
 
 ![A scan block](img/block.png)

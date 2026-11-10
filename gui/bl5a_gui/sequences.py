@@ -35,14 +35,18 @@ def checked_name(text, field):
     return text
 
 
+def owner(user):
+    """Whose sequences `user` names: the User box empty is config.USER."""
+    return (user or "").strip() or config.USER
+
+
 def folder(root, user):
-    """Where `user`'s sequences are kept under the data folder `root`; no
-    user (the panel's User box empty) is config.USER."""
+    """Where `user`'s sequences are kept under the data folder `root`."""
     root = items.data_root(root)
     if root is None:
         raise Invalid(items.EMPTY.format("Data folder", "choose one in the Data box; a user's sequences are kept "
                                          "in <data folder>/{}".format(FOLDER)))
-    return pathlib.Path(root, FOLDER, checked_name((user or "").strip() or config.USER, "User"))
+    return pathlib.Path(root, FOLDER, checked_name(owner(user), "User"))
 
 
 def _read(path, label):
@@ -70,11 +74,9 @@ def users(root):
 
 
 def saved(root, user):
-    """`user`'s sequence names, sorted; none when `root` or `user` is
-    unset or the folder is not there."""
+    """`user`'s sequence names, sorted; none when `root` is unset or the
+    folder is not there."""
     try:
-        if items.data_root(root) is None or not (user or "").strip():
-            return []
         return sorted(p.stem for p in folder(root, user).glob("*.json") if p.is_file())
     except (Invalid, OSError):
         return []
@@ -91,7 +93,7 @@ def get(name, root=None, user=None):
         return _read(TEMPLATES[name], name)
     path = folder(root, user) / (checked_name(name, "sequence") + ".json")
     if not path.is_file():
-        raise Invalid("sequence {!r}: not a template, nor saved by {}".format(name, user))
+        raise Invalid("sequence {!r}: not a template, nor saved by {}".format(name, owner(user)))
     return _read(path, str(path))
 
 
@@ -124,7 +126,7 @@ def delete(name, root, user):
     try:
         path.unlink()
     except FileNotFoundError:
-        raise Invalid("sequence {!r}: not saved by {}".format(name, user))
+        raise Invalid("sequence {!r}: not saved by {}".format(name, owner(user)))
 
 
 def _g(v):

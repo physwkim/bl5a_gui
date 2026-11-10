@@ -57,6 +57,18 @@ class SequencesTest(unittest.TestCase):
         self.assertEqual(path.parent.name, config.USER)
         self.assertEqual(sequences.users(self.root), [config.USER])
 
+    def test_no_user_lists_and_names_the_default_users_sequences(self):
+        sequences.save("mine", ERASE, self.root, config.USER)
+        for user in (None, "", "  "):
+            with self.subTest(user=user):
+                self.assertEqual(sequences.saved(self.root, user), ["mine"])
+                self.assertEqual(sequences.names(self.root, user), ["Coin cell", "Thin film", "mine"])
+                with self.assertRaisesRegex(Invalid, "nor saved by {}$".format(config.USER)):
+                    sequences.get("other", self.root, user)
+        sequences.delete("mine", self.root, "")
+        with self.assertRaisesRegex(Invalid, "not saved by {}$".format(config.USER)):
+            sequences.delete("mine", self.root, None)
+
     def test_refused(self):
         with self.assertRaisesRegex(Invalid, "template's name"):
             sequences.save("Thin film", ERASE, self.root, "kim")

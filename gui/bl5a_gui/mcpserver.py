@@ -943,7 +943,7 @@ def build(bl):
         the templates, the user's saved ones, and the users who saved
         any."""
         root, user = sequence_place(user, data_folder)
-        return out({"user": user, "data_folder": root, "templates": list(sequences.TEMPLATES),
+        return out({"user": sequences.owner(user), "data_folder": root, "templates": list(sequences.TEMPLATES),
                     "saved": sequences.saved(root, user), "users": sequences.users(root)})
 
     @tool(read_only=True)

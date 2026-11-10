@@ -1,3 +1,4 @@
+import json
 import math
 import types
 
@@ -100,6 +101,16 @@ def test_tools_and_their_arguments():
     assert tools["status"].annotations.read_only_hint
     assert tools["abort"].annotations.destructive_hint
     assert tools["stop_all"].annotations.destructive_hint
+
+
+def test_alignment_sequences_of_no_user_are_the_default_users(tmp_path):
+    sequences.save("mine", [{"kind": "erase"}], str(tmp_path), config.USER)
+    bl = mcpserver.Beamline("tcp://127.0.0.1:1", "tcp://127.0.0.1:2", "tcp://127.0.0.1:3", "tcp://127.0.0.1:4",
+                            "test")
+    result = anyio.run(mcpserver.build(bl).call_tool, "alignment_sequences",
+                       {"user": "", "data_folder": str(tmp_path)})
+    got = json.loads(result.content[0].text)
+    assert (got["user"], got["saved"]) == (config.USER, ["mine"])
 
 
 class FakePV:
